@@ -19,13 +19,13 @@ class TrajectoryTrainDataset(Dataset):
             self.trajectories[traj_idx] = []
 
             for index in range(len(trajectory) - 1):
-                _, pid, _, _, _, _, _, _, _, local_tim, _, norm_in_day, _, _, _, coo = trajectory.iloc[index]
+                _, pid, _, _, _, _, _, _, _, local_tim, _, _, _, _, _, coo = trajectory.iloc[index]
                 _, next_pid, _, _, _, _, _, _, _, _, _, _, _, _, _, next_coo = trajectory.iloc[index + 1]
                 POI_idx = POI_id2idx_dict[pid]
                 cat_idx = POI_idx2cat_idx_dict[POI_idx]
                 next_POI_idx = POI_id2idx_dict[next_pid]
                 next_cat_idx = POI_idx2cat_idx_dict[next_POI_idx]
-                features = [user_idx, POI_idx, cat_idx, norm_in_day, coo]
+                features = [user_idx, POI_idx, cat_idx, local_tim.hour, coo]
                 labels = [next_POI_idx, next_cat_idx, next_coo]
                 checkin = {'features': features, 'labels': labels}
                 self.trajectories[traj_idx].append(checkin)
@@ -59,13 +59,13 @@ class TrajectoryValDataset(Dataset):
             self.trajectories[traj_idx] = []
 
             for index in range(len(trajectory) - 1):
-                _, pid, _, _, _, _, _, _, _, local_tim, _, norm_in_day, _, _, _, coo = trajectory.iloc[index]
+                _, pid, _, _, _, _, _, _, _, local_tim, _, _, _, _, _, coo = trajectory.iloc[index]
                 _, next_pid, _, _, _, _, _, _, _, _, _, _, _, _, _, next_coo = trajectory.iloc[index + 1]
                 POI_idx = POI_id2idx_dict[pid]
                 cat_idx = POI_idx2cat_idx_dict[POI_idx]
                 next_POI_idx = POI_id2idx_dict[next_pid]
                 next_cat_idx = POI_idx2cat_idx_dict[next_POI_idx]
-                features = [user_idx, POI_idx, cat_idx, norm_in_day, coo]
+                features = [user_idx, POI_idx, cat_idx, local_tim.hour, coo]
                 labels = [next_POI_idx, next_cat_idx, next_coo]
                 checkin = {'features': features, 'labels': labels}
                 self.trajectories[traj_idx].append(checkin)
@@ -99,13 +99,13 @@ class TrajectoryTestDataset(Dataset):
             self.trajectories[traj_idx] = []
 
             for index in range(len(trajectory) - 1):
-                _, pid, _, _, _, _, _, _, _, local_tim, _, norm_in_day, _, _, _, coo = trajectory.iloc[index]
+                _, pid, _, _, _, _, _, _, _, local_tim, _, _, _, _, _, coo = trajectory.iloc[index]
                 _, next_pid, _, _, _, _, _, _, _, _, _, _, _, _, _, next_coo = trajectory.iloc[index + 1]
                 POI_idx = POI_id2idx_dict[pid]
                 cat_idx = POI_idx2cat_idx_dict[POI_idx]
                 next_POI_idx = POI_id2idx_dict[next_pid]
                 next_cat_idx = POI_idx2cat_idx_dict[next_POI_idx]
-                features = [user_idx, POI_idx, cat_idx, norm_in_day, coo]
+                features = [user_idx, POI_idx, cat_idx, local_tim.hour, coo]
                 if index == len(trajectory) - 2:
                     labels = [next_POI_idx, next_cat_idx, next_coo]
                 else:

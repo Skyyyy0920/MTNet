@@ -135,8 +135,8 @@ if __name__ == '__main__':
                               num_users=num_users, user_embed_dim=args.user_embed_dim,
                               num_POIs=num_POIs, POI_embed_dim=args.POI_embed_dim,
                               num_cats=num_cats, cat_embed_dim=args.cat_embed_dim,
-                              num_coos=n_clusters, coo_embed_dim=args.coo_embed_dim,
                               time_embed_dim=args.time_embed_dim,
+                              num_coos=n_clusters, coo_embed_dim=args.coo_embed_dim,
                               cell_type=args.cell_type, nary=args.nary,
                               head_num=args.transformer_head_num, hid_dim=args.transformer_hid_dim,
                               layer_num=args.transformer_layer_num, t_dropout=args.transformer_dropout,
@@ -215,9 +215,12 @@ if __name__ == '__main__':
             y_pred_POI_list.append(y_pred_POI.detach().cpu().numpy())
             y_label_POI_list.append(y_POI_in.detach().cpu().numpy())
 
-            loss_POI = criterion_POI(y_pred_POI_in, y_POI_in.long()) + criterion_POI(y_pred_POI_out, y_POI_out.long())
-            loss_cat = criterion_cat(y_pred_cat_in, y_cat_in.long()) + criterion_cat(y_pred_cat_out, y_cat_out.long())
-            loss_coo = criterion_coo(y_pred_coo_in, y_coo_in.long()) + criterion_coo(y_pred_coo_out, y_coo_out.long())
+            loss_POI = criterion_POI(y_pred_POI_in, y_POI_in.long()) + \
+                       criterion_POI(y_pred_POI_out, y_POI_out.long()) * args.out_tree_weight
+            loss_cat = criterion_cat(y_pred_cat_in, y_cat_in.long()) + \
+                       criterion_cat(y_pred_cat_out, y_cat_out.long()) * args.out_tree_weight
+            loss_coo = criterion_coo(y_pred_coo_in, y_coo_in.long()) + \
+                       criterion_coo(y_pred_coo_out, y_coo_out.long()) * args.out_tree_weight
             loss = loss_POI + loss_cat + loss_coo
             loss_list.append(loss.item())
             loss.backward()

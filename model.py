@@ -4,56 +4,6 @@ import torch
 import torch.nn as nn
 
 
-def t2v(tau, f, out_features, w, b, w0, b0, arg=None):
-    if arg:
-        v1 = f(torch.matmul(tau, w) + b, arg)
-    else:
-        v1 = f(torch.matmul(tau, w) + b)
-    v2 = torch.matmul(tau, w0) + b0
-    return torch.cat([v1, v2], 1)
-
-
-class SineActivation(nn.Module):
-    def __init__(self, in_features, out_features):
-        super(SineActivation, self).__init__()
-        self.out_features = out_features
-        self.w0 = nn.parameter.Parameter(torch.randn(in_features, 1))
-        self.b0 = nn.parameter.Parameter(torch.randn(in_features, 1))
-        self.w = nn.parameter.Parameter(torch.randn(in_features, out_features - 1))
-        self.b = nn.parameter.Parameter(torch.randn(in_features, out_features - 1))
-        self.f = torch.sin
-
-    def forward(self, tau):
-        return t2v(tau, self.f, self.out_features, self.w, self.b, self.w0, self.b0)
-
-
-class CosineActivation(nn.Module):
-    def __init__(self, in_features, out_features):
-        super(CosineActivation, self).__init__()
-        self.out_features = out_features
-        self.w0 = nn.parameter.Parameter(torch.randn(in_features, 1))
-        self.b0 = nn.parameter.Parameter(torch.randn(in_features, 1))
-        self.w = nn.parameter.Parameter(torch.randn(in_features, out_features - 1))
-        self.b = nn.parameter.Parameter(torch.randn(in_features, out_features - 1))
-        self.f = torch.cos
-
-    def forward(self, tau):
-        return t2v(tau, self.f, self.out_features, self.w, self.b, self.w0, self.b0)
-
-
-class Time2Vec(nn.Module):
-    def __init__(self, activation='sin', out_dim=32):
-        super(Time2Vec, self).__init__()
-        if activation == 'sin':
-            self.l1 = SineActivation(1, out_dim)
-        elif activation == 'cos':
-            self.l1 = CosineActivation(1, out_dim)
-
-    def forward(self, x):
-        x = self.l1(x)
-        return x
-
-
 class ChildSumTreeLSTMCell(nn.Module):
     def __init__(self, embedding_dim, h_size):
         super(ChildSumTreeLSTMCell, self).__init__()
@@ -128,8 +78,8 @@ class TreeLSTM(nn.Module):
                  num_users=3000, user_embed_dim=128,
                  num_POIs=5000, POI_embed_dim=128,
                  num_cats=300, cat_embed_dim=32,
-                 num_coos=1024, coo_embed_dim=32,
                  time_embed_dim=32,
+                 num_coos=1024, coo_embed_dim=64,
                  cell_type='N-ary', nary=3,
                  head_num=4, hid_dim=1024, layer_num=2, t_dropout=0.3,
                  device='cuda'):
@@ -141,8 +91,8 @@ class TreeLSTM(nn.Module):
         self.in_POI_embedding = nn.Embedding(num_embeddings=num_POIs, embedding_dim=POI_embed_dim)
         self.out_POI_embedding = nn.Embedding(num_embeddings=num_POIs, embedding_dim=POI_embed_dim)
         self.cat_embedding = nn.Embedding(num_embeddings=num_cats, embedding_dim=cat_embed_dim)
+        self.time_embedding = nn.Embedding(num_embeddings=24, embedding_dim=time_embed_dim)
         self.coo_embedding = nn.Embedding(num_embeddings=num_coos, embedding_dim=coo_embed_dim)
-        self.l1 = SineActivation(in_features=1, out_features=time_embed_dim)
         # dropout
         self.embed_dropout = nn.Dropout(embed_dropout)
         self.model_dropout = nn.Dropout(model_dropout)
@@ -161,34 +111,23 @@ class TreeLSTM(nn.Module):
         self.decoder_cat_out = nn.Linear(h_size, num_cats)
         self.decoder_coo_out = nn.Linear(h_size, num_coos)
 
-    def forward(self, batch, g, h, c, h_child, c_child,
-                re_batch, re_g, re_h, re_c, re_h_child, re_c_child):
+    def forward(self, batch, g, h, c, h_child, c_child, re_batch, re_g, re_h, re_c, re_h_child, re_c_child):
         user_embedding = self.user_embedding(batch.features[:, 0].long())
         POI_embedding = self.in_POI_embedding(batch.features[:, 1].long())
         cat_embedding = self.cat_embedding(batch.features[:, 2].long())
-        time_embedding = []
-        for time in batch.features[:, 3]:
-            t_input = torch.tensor([time], dtype=torch.float).to(device=self.device)
-            time_embedding.append(torch.squeeze(self.l1(t_input)))
-        time_embedding = np.array([item.cpu().detach().numpy() for item in time_embedding])
-        time_embedding = torch.tensor(time_embedding).to(device=self.device)
+        time_embedding = self.time_embedding(batch.features[:, 3].long())
         coo_embedding = self.coo_embedding(batch.features[:, 4].long())
         concat_embedding = torch.cat(
-            (user_embedding, time_embedding, POI_embedding, cat_embedding, coo_embedding),
+            (user_embedding, POI_embedding, cat_embedding, time_embedding, coo_embedding),
             dim=1)  # concat -> [batch_size, embedding_dim]
 
         re_user_embedding = self.user_embedding(re_batch.features[:, 0].long())
         re_POI_embedding = self.out_POI_embedding(re_batch.features[:, 1].long())
         re_cat_embedding = self.cat_embedding(re_batch.features[:, 2].long())
-        re_time_embedding = []
-        for time in re_batch.features[:, 3]:
-            t_input = torch.tensor([time], dtype=torch.float).to(device=self.device)
-            re_time_embedding.append(torch.squeeze(self.l1(t_input)))
-        re_time_embedding = np.array([item.cpu().detach().numpy() for item in re_time_embedding])
-        re_time_embedding = torch.tensor(re_time_embedding).to(device=self.device)
+        re_time_embedding = self.time_embedding(re_batch.features[:, 3].long())
         re_coo_embedding = self.coo_embedding(re_batch.features[:, 4].long())
         re_concat_embedding = torch.cat(
-            (re_user_embedding, re_time_embedding, re_POI_embedding, re_cat_embedding, re_coo_embedding),
+            (re_user_embedding, re_POI_embedding, re_cat_embedding, re_time_embedding, re_coo_embedding),
             dim=1)  # concat -> [batch_size, embedding_dim]
 
         g.ndata["iou"] = self.in_cell.W_iou(self.embed_dropout(concat_embedding))  # [batch_size, nary * h_size]

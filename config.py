@@ -62,7 +62,7 @@ def get_args():
                         help='latitude part number')
     parser.add_argument('--coo_embed_dim',
                         type=int,
-                        default=32,
+                        default=64,
                         help='Coordinate embedding dimensions')
     parser.add_argument('--transformer_head_num',
                         type=int,
@@ -82,11 +82,11 @@ def get_args():
                         help='Dropout rate for transformer')
     parser.add_argument('--embed_dropout',
                         type=float,
-                        default=0.3,
+                        default=0.2,
                         help='Dropout rate for embedding')
     parser.add_argument('--model_dropout',
                         type=float,
-                        default=0.5,
+                        default=0.4,
                         help='Dropout rate for TreeLSTM')
     parser.add_argument('--h_size',
                         type=int,
@@ -131,6 +131,7 @@ def get_args():
     parser.add_argument('--need_plot_tree',
                         type=bool,
                         default=False,
+                        # default=True,
                         help='Whether to plot the tree')
     parser.add_argument('--workers',
                         type=int,
