@@ -82,11 +82,11 @@ def get_args():
                         help='Dropout rate for transformer')
     parser.add_argument('--embed_dropout',
                         type=float,
-                        default=0.3,
+                        default=0.2,
                         help='Dropout rate for embedding')
     parser.add_argument('--model_dropout',
                         type=float,
-                        default=0.5,
+                        default=0.4,
                         help='Dropout rate for TreeLSTM')
     parser.add_argument('--h_size',
                         type=int,

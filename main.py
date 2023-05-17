@@ -181,6 +181,13 @@ if __name__ == '__main__':
                 batcher.append(traj_tree.to(device=args.device))
                 re_traj_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.need_plot_tree, 'out')
                 re_batcher.append(re_traj_tree.to(device=args.device))
+                if random.random() < 0.3:
+                    en_traj_tree = construct_dgl_enhance_tree(trajectory, args.cell_type, args.nary,
+                                                              args.need_plot_tree, 'in')
+                    batcher.append(en_traj_tree)
+                    en_re_traj_tree = construct_dgl_enhance_tree(trajectory, args.cell_type, args.nary,
+                                                                 args.need_plot_tree, 'out')
+                    re_batcher.append(en_re_traj_tree)
 
             batch_trees = dgl.batch(batcher).to(device=args.device)
             batch_input = SSTBatch(graph=batch_trees,
