@@ -54,11 +54,11 @@ def get_args():
                         help='Category embedding dimensions')
     parser.add_argument('--lon_parts',
                         type=int,
-                        default=32,
+                        default=64,
                         help='longitude part number')
     parser.add_argument('--lat_parts',
                         type=int,
-                        default=32,
+                        default=64,
                         help='latitude part number')
     parser.add_argument('--coo_embed_dim',
                         type=int,
@@ -66,7 +66,7 @@ def get_args():
                         help='Coordinate embedding dimensions')
     parser.add_argument('--transformer_head_num',
                         type=int,
-                        default=4,
+                        default=2,
                         help='Number of heads in Multi-Head Attention')
     parser.add_argument('--transformer_hid_dim',
                         type=int,
