@@ -62,7 +62,7 @@ def get_args():
                         help='latitude part number')
     parser.add_argument('--coo_embed_dim',
                         type=int,
-                        default=32,
+                        default=64,
                         help='Coordinate embedding dimensions')
     parser.add_argument('--transformer_head_num',
                         type=int,
@@ -128,9 +128,10 @@ def get_args():
                         help='Weight decay (L2 loss on parameters)')
 
     # Experiment configuration
-    parser.add_argument('--need_plot_tree',
+    parser.add_argument('--plot_tree',
                         type=bool,
                         default=False,
+                        # default=True,
                         help='Whether to plot the tree')
     parser.add_argument('--workers',
                         type=int,

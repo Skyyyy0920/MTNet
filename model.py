@@ -1,57 +1,6 @@
 import dgl
-import numpy as np
 import torch
 import torch.nn as nn
-
-
-def t2v(tau, f, out_features, w, b, w0, b0, arg=None):
-    if arg:
-        v1 = f(torch.matmul(tau, w) + b, arg)
-    else:
-        v1 = f(torch.matmul(tau, w) + b)
-    v2 = torch.matmul(tau, w0) + b0
-    return torch.cat([v1, v2], 1)
-
-
-class SineActivation(nn.Module):
-    def __init__(self, in_features, out_features):
-        super(SineActivation, self).__init__()
-        self.out_features = out_features
-        self.w0 = nn.parameter.Parameter(torch.randn(in_features, 1))
-        self.b0 = nn.parameter.Parameter(torch.randn(in_features, 1))
-        self.w = nn.parameter.Parameter(torch.randn(in_features, out_features - 1))
-        self.b = nn.parameter.Parameter(torch.randn(in_features, out_features - 1))
-        self.f = torch.sin
-
-    def forward(self, tau):
-        return t2v(tau, self.f, self.out_features, self.w, self.b, self.w0, self.b0)
-
-
-class CosineActivation(nn.Module):
-    def __init__(self, in_features, out_features):
-        super(CosineActivation, self).__init__()
-        self.out_features = out_features
-        self.w0 = nn.parameter.Parameter(torch.randn(in_features, 1))
-        self.b0 = nn.parameter.Parameter(torch.randn(in_features, 1))
-        self.w = nn.parameter.Parameter(torch.randn(in_features, out_features - 1))
-        self.b = nn.parameter.Parameter(torch.randn(in_features, out_features - 1))
-        self.f = torch.cos
-
-    def forward(self, tau):
-        return t2v(tau, self.f, self.out_features, self.w, self.b, self.w0, self.b0)
-
-
-class Time2Vec(nn.Module):
-    def __init__(self, activation='sin', out_dim=32):
-        super(Time2Vec, self).__init__()
-        if activation == 'sin':
-            self.l1 = SineActivation(1, out_dim)
-        elif activation == 'cos':
-            self.l1 = CosineActivation(1, out_dim)
-
-    def forward(self, x):
-        x = self.l1(x)
-        return x
 
 
 class ChildSumTreeLSTMCell(nn.Module):
@@ -128,97 +77,106 @@ class TreeLSTM(nn.Module):
                  num_users=3000, user_embed_dim=128,
                  num_POIs=5000, POI_embed_dim=128,
                  num_cats=300, cat_embed_dim=32,
-                 num_coos=1024, coo_embed_dim=32,
                  time_embed_dim=32,
+                 num_coos=1024, coo_embed_dim=64,
                  cell_type='N-ary', nary=3,
                  head_num=4, hid_dim=1024, layer_num=2, t_dropout=0.3,
                  device='cuda'):
         super(TreeLSTM, self).__init__()
         self.device = device
+        self.h_size = h_size
+        self.nary = nary
         # embedding
         self.embedding_dim = user_embed_dim + POI_embed_dim + cat_embed_dim + time_embed_dim + coo_embed_dim
-        self.user_embedding = nn.Embedding(num_embeddings=num_users, embedding_dim=user_embed_dim)
-        self.in_POI_embedding = nn.Embedding(num_embeddings=num_POIs, embedding_dim=POI_embed_dim)
-        self.out_POI_embedding = nn.Embedding(num_embeddings=num_POIs, embedding_dim=POI_embed_dim)
-        self.cat_embedding = nn.Embedding(num_embeddings=num_cats, embedding_dim=cat_embed_dim)
-        self.coo_embedding = nn.Embedding(num_embeddings=num_coos, embedding_dim=coo_embed_dim)
-        self.l1 = SineActivation(in_features=1, out_features=time_embed_dim)
+        self.user_embedding = nn.Embedding(num_users, user_embed_dim)
+        self.in_POI_embedding = nn.Embedding(num_POIs, POI_embed_dim)
+        self.out_POI_embedding = nn.Embedding(num_POIs, POI_embed_dim)
+        self.cat_embedding = nn.Embedding(num_cats, cat_embed_dim)
+        self.time_embedding = nn.Embedding(24, time_embed_dim)
+        self.coo_embedding = nn.Embedding(num_coos, coo_embed_dim)
+        # fuse embedding
+        self.user_POI_fusion = nn.Linear(user_embed_dim + POI_embed_dim, user_embed_dim + POI_embed_dim)
+        self.cat_time_fusion = nn.Linear(cat_embed_dim + time_embed_dim, cat_embed_dim + time_embed_dim)
+        self.coo_time_fusion = nn.Linear(coo_embed_dim + time_embed_dim, coo_embed_dim + time_embed_dim)
         # dropout
         self.embed_dropout = nn.Dropout(embed_dropout)
         self.model_dropout = nn.Dropout(model_dropout)
         # cell
         if cell_type == 'N-ary':
-            self.in_cell = NaryTreeLSTMCell(self.embedding_dim, h_size, nary, head_num, hid_dim, layer_num, t_dropout)
-            self.out_cell = NaryTreeLSTMCell(self.embedding_dim, h_size, nary, head_num, hid_dim, layer_num, t_dropout)
-        else:
-            self.in_cell = ChildSumTreeLSTMCell(self.embedding_dim, h_size)
-            self.out_cell = ChildSumTreeLSTMCell(self.embedding_dim, h_size)
+            self.POI_cell = NaryTreeLSTMCell(user_embed_dim + POI_embed_dim, h_size, nary, head_num, hid_dim, layer_num,
+                                             t_dropout)
+            self.cat_cell = NaryTreeLSTMCell(cat_embed_dim + time_embed_dim, h_size, nary, head_num, hid_dim, layer_num,
+                                             t_dropout)
+            self.coo_cell = NaryTreeLSTMCell(coo_embed_dim + time_embed_dim, h_size, nary, head_num, hid_dim, layer_num,
+                                             t_dropout)
         # decoder
-        self.decoder_POI_in = nn.Linear(h_size, num_POIs)
-        self.decoder_cat_in = nn.Linear(h_size, num_cats)
-        self.decoder_coo_in = nn.Linear(h_size, num_coos)
-        self.decoder_POI_out = nn.Linear(h_size, num_POIs)
-        self.decoder_cat_out = nn.Linear(h_size, num_cats)
-        self.decoder_coo_out = nn.Linear(h_size, num_coos)
+        self.decoder_POI = nn.Linear(h_size + cat_embed_dim + coo_embed_dim, num_POIs)
+        self.decoder_cat = nn.Linear(h_size, num_cats)
+        self.decoder_coo = nn.Linear(h_size, num_coos)
+        # transfer
+        self.cat_trans = nn.Linear(h_size, cat_embed_dim)
+        self.coo_trans = nn.Linear(h_size, coo_embed_dim)
 
-    def forward(self, batch, g, h, c, h_child, c_child,
-                re_batch, re_g, re_h, re_c, re_h_child, re_c_child):
-        user_embedding = self.user_embedding(batch.features[:, 0].long())
-        POI_embedding = self.in_POI_embedding(batch.features[:, 1].long())
-        cat_embedding = self.cat_embedding(batch.features[:, 2].long())
-        time_embedding = []
-        for time in batch.features[:, 3]:
-            t_input = torch.tensor([time], dtype=torch.float).to(device=self.device)
-            time_embedding.append(torch.squeeze(self.l1(t_input)))
-        time_embedding = np.array([item.cpu().detach().numpy() for item in time_embedding])
-        time_embedding = torch.tensor(time_embedding).to(device=self.device)
-        coo_embedding = self.coo_embedding(batch.features[:, 4].long())
-        concat_embedding = torch.cat(
-            (user_embedding, time_embedding, POI_embedding, cat_embedding, coo_embedding),
-            dim=1)  # concat -> [batch_size, embedding_dim]
+    def forward(self, in_trees, out_trees=None):
+        user_embedding = self.user_embedding(in_trees.features[:, 0].long())
+        POI_embedding = self.in_POI_embedding(in_trees.features[:, 1].long())
+        cat_embedding = self.cat_embedding(in_trees.features[:, 2].long())
+        time_embedding = self.time_embedding(in_trees.features[:, 3].long())
+        coo_embedding = self.coo_embedding(in_trees.features[:, 4].long())
+        # fusion
+        user_POI_fusion = self.user_POI_fusion(torch.cat((user_embedding, POI_embedding), dim=-1))
+        cat_time_fusion = self.cat_time_fusion(torch.cat((cat_embedding, time_embedding), dim=-1))
+        coo_time_fusion = self.coo_time_fusion(torch.cat((coo_embedding, time_embedding), dim=-1))
 
-        re_user_embedding = self.user_embedding(re_batch.features[:, 0].long())
-        re_POI_embedding = self.out_POI_embedding(re_batch.features[:, 1].long())
-        re_cat_embedding = self.cat_embedding(re_batch.features[:, 2].long())
-        re_time_embedding = []
-        for time in re_batch.features[:, 3]:
-            t_input = torch.tensor([time], dtype=torch.float).to(device=self.device)
-            re_time_embedding.append(torch.squeeze(self.l1(t_input)))
-        re_time_embedding = np.array([item.cpu().detach().numpy() for item in re_time_embedding])
-        re_time_embedding = torch.tensor(re_time_embedding).to(device=self.device)
-        re_coo_embedding = self.coo_embedding(re_batch.features[:, 4].long())
-        re_concat_embedding = torch.cat(
-            (re_user_embedding, re_time_embedding, re_POI_embedding, re_cat_embedding, re_coo_embedding),
-            dim=1)  # concat -> [batch_size, embedding_dim]
-
-        g.ndata["iou"] = self.in_cell.W_iou(self.embed_dropout(concat_embedding))  # [batch_size, nary * h_size]
-        g.ndata["x"] = self.embed_dropout(concat_embedding)  # [batch_size, embedding_dim]
-        g.ndata["h"] = h
-        g.ndata["c"] = c
-        g.ndata["h_child"] = h_child
-        g.ndata["c_child"] = c_child
-        re_g.ndata["iou"] = self.out_cell.W_iou(self.embed_dropout(re_concat_embedding))  # [batch_size, nary * h_size]
-        re_g.ndata["x"] = self.embed_dropout(re_concat_embedding)  # [batch_size, embedding_dim]
-        re_g.ndata["h"] = re_h
-        re_g.ndata["c"] = re_c
-        re_g.ndata["h_child"] = re_h_child
-        re_g.ndata["c_child"] = re_c_child
+        g = in_trees.graph.to(self.device)
+        n = g.num_nodes()
+        g.ndata["iou"] = self.POI_cell.W_iou(self.embed_dropout(user_POI_fusion))  # [batch_size, nary * h_size]
+        g.ndata["x"] = self.embed_dropout(user_POI_fusion)  # [batch_size, embedding_dim]
+        g.ndata["h"] = torch.zeros((n, self.h_size)).to(self.device)
+        g.ndata["c"] = torch.zeros((n, self.h_size)).to(self.device)
+        g.ndata["h_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
+        g.ndata["c_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
 
         dgl.prop_nodes_topo(graph=g,
-                            message_func=self.in_cell.message_func,
-                            reduce_func=self.in_cell.reduce_func,
-                            apply_node_func=self.in_cell.apply_node_func)
-        dgl.prop_nodes_topo(graph=re_g,
-                            message_func=self.out_cell.message_func,
-                            reduce_func=self.out_cell.reduce_func,
-                            apply_node_func=self.out_cell.apply_node_func)
+                            message_func=self.POI_cell.message_func,
+                            reduce_func=self.POI_cell.reduce_func,
+                            apply_node_func=self.POI_cell.apply_node_func)
 
-        h = self.model_dropout(g.ndata.pop("h"))  # [batch_size, h_size]
-        re_h = self.model_dropout(re_g.ndata.pop("h"))
-        y_pred_POI_in = self.decoder_POI_in(h)
-        y_pred_cat_in = self.decoder_cat_in(h)
-        y_pred_coo_in = self.decoder_coo_in(h)
-        y_pred_POI_out = self.decoder_POI_out(re_h)
-        y_pred_cat_out = self.decoder_cat_out(re_h)
-        y_pred_coo_out = self.decoder_coo_out(re_h)
-        return y_pred_POI_in, y_pred_cat_in, y_pred_coo_in, y_pred_POI_out, y_pred_cat_out, y_pred_coo_out
+        h_POI = self.model_dropout(g.ndata.pop("h"))  # [batch_size, h_size]
+
+        g.ndata["iou"] = self.cat_cell.W_iou(self.embed_dropout(cat_time_fusion))  # [batch_size, nary * h_size]
+        g.ndata["x"] = self.embed_dropout(cat_time_fusion)  # [batch_size, embedding_dim]
+        g.ndata["h"] = torch.zeros((n, self.h_size)).to(self.device)
+        g.ndata["c"] = torch.zeros((n, self.h_size)).to(self.device)
+        g.ndata["h_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
+        g.ndata["c_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
+
+        dgl.prop_nodes_topo(graph=g,
+                            message_func=self.cat_cell.message_func,
+                            reduce_func=self.cat_cell.reduce_func,
+                            apply_node_func=self.cat_cell.apply_node_func)
+
+        h_cat = self.model_dropout(g.ndata.pop("h"))  # [batch_size, h_size]
+
+        g.ndata["iou"] = self.coo_cell.W_iou(self.embed_dropout(coo_time_fusion))  # [batch_size, nary * h_size]
+        g.ndata["x"] = self.embed_dropout(coo_time_fusion)  # [batch_size, embedding_dim]
+        g.ndata["h"] = torch.zeros((n, self.h_size)).to(self.device)
+        g.ndata["c"] = torch.zeros((n, self.h_size)).to(self.device)
+        g.ndata["h_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
+        g.ndata["c_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
+
+        dgl.prop_nodes_topo(graph=g,
+                            message_func=self.coo_cell.message_func,
+                            reduce_func=self.coo_cell.reduce_func,
+                            apply_node_func=self.coo_cell.apply_node_func)
+
+        h_coo = self.model_dropout(g.ndata.pop("h"))
+
+        y_pred_cat = self.decoder_cat(h_cat)
+        y_pred_coo = self.decoder_coo(h_coo)
+
+        cat_trans = self.cat_trans(h_cat)
+        coo_trans = self.coo_trans(h_coo)
+        y_pred_POI = self.decoder_POI(torch.concat((h_POI, cat_trans, coo_trans), dim=-1))
+
+        return y_pred_POI, y_pred_cat, y_pred_coo

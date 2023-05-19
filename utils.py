@@ -2,7 +2,6 @@ import os
 import re
 import dgl
 import glob
-import random
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -121,7 +120,7 @@ def add_children_for_short_traj(tree, trajectory, index, idx2idx_dict, flag_dict
         for i in range(nary, 0, -1):
             if index - i <= 0:  # use trajectory[0] to padding
                 node_id = tree.number_of_nodes()
-                tree.add_node(node_id, x=trajectory[0]['features'], y=[-1, -1, -1])
+                tree.add_node(node_id, x=trajectory[0]['features'], y=[-1, -1, -1, -1])
                 tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
             else:
                 add_children_for_short_traj(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
@@ -172,7 +171,7 @@ def add_children_for_short_traj_out(tree, trajectory, index, idx2idx_dict, flag_
         for i in range(nary, 0, -1):
             if index - i <= 0:  # use trajectory[len-1] to padding
                 node_id = tree.number_of_nodes()
-                tree.add_node(node_id, x=trajectory[len(trajectory) - 1]['features'], y=[-1, -1, -1])
+                tree.add_node(node_id, x=trajectory[len(trajectory) - 1]['features'], y=[-1, -1, -1, -1])
                 tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
                 max_index = len(trajectory) - 1
             else:
@@ -232,119 +231,6 @@ def construct_dgl_tree(trajectory, cell_type, nary, need_plot, tree_type):
 
     if need_plot:
         plot_tree(tree)  # optional
-
-    dgl_tree = dgl.from_networkx(tree, node_attrs=['x', 'y'])
-    return dgl_tree
-
-
-def add_children_for_short_traj_en(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
-    """
-    Especially for N-ary TreeLSTM's short trajectory
-    """
-    node = trajectory[index]
-    idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], x=node['features'], y=node['labels'])
-    if index > 0 and flag_dict[index]:
-        flag_dict[index] = 0  # already play as parent node
-        for i in range(nary, 0, -1):
-            if index - i <= 0:  # use trajectory[0] to padding
-                node_id = tree.number_of_nodes()
-                ran = random.randint(0, len(trajectory) - 1)
-                tree.add_node(node_id, x=trajectory[ran]['features'], y=[-1, -1, -1])
-                tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
-            else:
-                add_children_for_short_traj_en(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
-                tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
-    return
-
-
-def add_children_for_Nary_en(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
-    """
-    Using DFS to construct the tree for N-ary TreeLSTM
-    """
-    if index != len(trajectory) - 1 and random.random() < 0.5:
-        ran = random.randint(0, len(trajectory) - 1)
-        node = trajectory[ran]
-    else:
-        node = trajectory[index]
-    idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], x=node['features'], y=node['labels'])
-    if index >= nary and flag_dict[index]:
-        flag_dict[index] = 0  # already play as parent node
-        for i in range(nary, 0, -1):
-            add_children_for_Nary_en(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
-            tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
-    return
-
-
-def add_children_for_short_traj_out_en(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
-    re_index = len(trajectory) - 1 - index
-    max_index = re_index
-    node = trajectory[re_index]
-    idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], x=node['features'], y=node['labels'])
-
-    if index > 0 and flag_dict[index]:
-        flag_dict[index] = 0  # already play as parent node
-        for i in range(nary, 0, -1):
-            if index - i <= 0:  # use trajectory[len-1] to padding
-                node_id = tree.number_of_nodes()
-                ran = random.randint(0, len(trajectory) - 1)
-                tree.add_node(node_id, x=trajectory[ran]['features'], y=[-1, -1, -1])
-                tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
-                max_index = len(trajectory) - 1
-            else:
-                child_idx = add_children_for_short_traj_out_en(tree, trajectory, index - i, idx2idx_dict, flag_dict,
-                                                               nary)
-                max_index = child_idx if max_index < child_idx else max_index
-                tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
-
-    tree.add_node(idx2idx_dict[index], x=node['features'], y=trajectory[max_index]['labels'])
-    return max_index
-
-
-def add_children_for_Nary_out_en(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
-    re_index = len(trajectory) - 1 - index
-    max_index = re_index
-    if index != len(trajectory) - 1 and random.random() < 0.5:
-        ran = random.randint(0, len(trajectory) - 1)
-        node = trajectory[ran]
-    else:
-        node = trajectory[re_index]
-    idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], x=node['features'], y=node['labels'])
-
-    if index >= nary and flag_dict[index]:
-        flag_dict[index] = 0  # already play as parent node
-        for i in range(nary, 0, -1):
-            child_index = add_children_for_Nary_out_en(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
-            max_index = child_index if max_index < child_index else max_index
-            tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
-
-    tree.add_node(idx2idx_dict[index], x=node['features'], y=trajectory[max_index]['labels'])  # change node label
-    return max_index
-
-
-def construct_dgl_enhance_tree(trajectory, cell_type, nary, need_plot, tree_type):
-    tree = nx.DiGraph()
-    idx2idx_dict = {}
-    flag_dict = dict(zip(range(len(trajectory)), np.ones(len(trajectory))))
-
-    if tree_type == 'in':
-        start_index = len(trajectory) - 1
-        if cell_type == 'N-ary':
-            if len(trajectory) <= nary:
-                add_children_for_short_traj_en(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
-            else:
-                add_children_for_Nary_en(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
-
-    elif tree_type == 'out':  # out tree
-        start_index = len(trajectory) - 1
-        if cell_type == 'N-ary':
-            if len(trajectory) <= nary:
-                add_children_for_short_traj_out_en(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
-            else:
-                add_children_for_Nary_out_en(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
 
     dgl_tree = dgl.from_networkx(tree, node_attrs=['x', 'y'])
     return dgl_tree
