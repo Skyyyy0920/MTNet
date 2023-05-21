@@ -54,32 +54,16 @@ def get_args():
                         help='Category embedding dimensions')
     parser.add_argument('--lon_parts',
                         type=int,
-                        default=64,
+                        default=32,
                         help='longitude part number')
     parser.add_argument('--lat_parts',
                         type=int,
-                        default=64,
+                        default=32,
                         help='latitude part number')
     parser.add_argument('--coo_embed_dim',
                         type=int,
                         default=64,
                         help='Coordinate embedding dimensions')
-    parser.add_argument('--transformer_head_num',
-                        type=int,
-                        default=2,
-                        help='Number of heads in Multi-Head Attention')
-    parser.add_argument('--transformer_hid_dim',
-                        type=int,
-                        default=1024,
-                        help='Hidden dimension in TransformerEncoder')
-    parser.add_argument('--transformer_layer_num',
-                        type=int,
-                        default=2,
-                        help='Number of TransformerEncoderLayer')
-    parser.add_argument('--transformer_dropout',
-                        type=float,
-                        default=0.4,
-                        help='Dropout rate for transformer')
     parser.add_argument('--embed_dropout',
                         type=float,
                         default=0.2,
@@ -104,7 +88,7 @@ def get_args():
                         help='Gradient accumulation to solve the GPU memory problem')
     parser.add_argument('--epochs',
                         type=int,
-                        default=360,
+                        default=200,
                         help='Number of epochs to train')  # 50
     parser.add_argument('--lr',
                         type=float,
@@ -112,26 +96,21 @@ def get_args():
                         help='Initial learning rate')
     parser.add_argument('--lr_step_size',
                         type=int,
-                        default=10,
+                        default=8,
                         help='Learning rate scheduler factor')
     parser.add_argument('--lr_gamma',
                         type=float,
                         default=0.9,
                         help='Learning rate scheduler factor')
-    parser.add_argument('--out_tree_weight',
-                        type=float,
-                        default=0.8,
-                        help='out tree weight')
     parser.add_argument('--weight_decay',
                         type=float,
                         default=1e-4,
                         help='Weight decay (L2 loss on parameters)')
 
     # Experiment configuration
-    parser.add_argument('--need_plot_tree',
+    parser.add_argument('--plot_tree',
                         type=bool,
                         default=False,
-                        # default=True,
                         help='Whether to plot the tree')
     parser.add_argument('--workers',
                         type=int,

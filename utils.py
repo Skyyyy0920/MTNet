@@ -31,6 +31,18 @@ def increment_path(path, exist_ok=True, sep=''):
         return f"{path}{sep}{n}"  # update path
 
 
+def create_mapping_matrix(df, POI_id2idx_dict, cat_id2idx_dict):
+    n, m = len(cat_id2idx_dict), len(POI_id2idx_dict)
+    mapping_matrix = np.zeros((n, m))
+    for index, row in df.iterrows():
+        POI_idx = POI_id2idx_dict[row['POI_id']]
+        cat_idx = cat_id2idx_dict[row['POI_catid']]
+        mapping_matrix[cat_idx][POI_idx] = 1
+    for i in range(n):
+        mapping_matrix[i] = mapping_matrix[i] / np.sum(mapping_matrix[i])
+    return mapping_matrix
+
+
 def top_k_acc(y_true_seq, y_pred_seq, k):
     hit = 0
     count = 0
@@ -44,6 +56,13 @@ def top_k_acc(y_true_seq, y_pred_seq, k):
             hit += 1
         count += 1
     return hit / count
+
+
+def get_performance(y_true_seq, y_pred_seq):
+    acc = []
+    for k in [1, 5, 10, 20]:
+        acc.append(top_k_acc(y_true_seq, y_pred_seq, k))
+    return acc[0], acc[1], acc[2], acc[3]
 
 
 def mAP_metric(y_true_seq, y_pred_seq, k):
@@ -120,7 +139,7 @@ def add_children_for_short_traj(tree, trajectory, index, idx2idx_dict, flag_dict
         for i in range(nary, 0, -1):
             if index - i <= 0:  # use trajectory[0] to padding
                 node_id = tree.number_of_nodes()
-                tree.add_node(node_id, x=trajectory[0]['features'], y=[-1, -1, -1])
+                tree.add_node(node_id, x=trajectory[0]['features'], y=[-1, -1, -1, -1])
                 tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
             else:
                 add_children_for_short_traj(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
@@ -159,75 +178,19 @@ def add_children_for_ChildSum(tree, trajectory, index, idx2idx_dict, flag_dict, 
     return
 
 
-def add_children_for_short_traj_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
-    re_index = len(trajectory) - 1 - index
-    max_index = re_index
-    node = trajectory[re_index]
-    idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], x=node['features'], y=node['labels'])
-
-    if index > 0 and flag_dict[index]:
-        flag_dict[index] = 0  # already play as parent node
-        for i in range(nary, 0, -1):
-            if index - i <= 0:  # use trajectory[len-1] to padding
-                node_id = tree.number_of_nodes()
-                tree.add_node(node_id, x=trajectory[len(trajectory) - 1]['features'], y=[-1, -1, -1])
-                tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
-                max_index = len(trajectory) - 1
-            else:
-                child_idx = add_children_for_short_traj_out(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
-                max_index = child_idx if max_index < child_idx else max_index
-                tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
-
-    tree.add_node(idx2idx_dict[index], x=node['features'], y=trajectory[max_index]['labels'])
-    return max_index
-
-
-def add_children_for_Nary_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
-    re_index = len(trajectory) - 1 - index
-    max_index = re_index
-    node = trajectory[re_index]
-    idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], x=node['features'], y=node['labels'])
-
-    if index >= nary and flag_dict[index]:
-        flag_dict[index] = 0  # already play as parent node
-        for i in range(nary, 0, -1):
-            child_index = add_children_for_Nary_out(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
-            max_index = child_index if max_index < child_index else max_index
-            tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
-
-    tree.add_node(idx2idx_dict[index], x=node['features'], y=trajectory[max_index]['labels'])  # change node label
-    return max_index
-
-
-def construct_dgl_tree(trajectory, cell_type, nary, need_plot, tree_type):
+def construct_dgl_tree(trajectory, cell_type, nary, need_plot):
     tree = nx.DiGraph()
     idx2idx_dict = {}
     flag_dict = dict(zip(range(len(trajectory)), np.ones(len(trajectory))))
 
-    if tree_type == 'in':
-        start_index = len(trajectory) - 1
-        if cell_type == 'N-ary':
-            if len(trajectory) <= nary:
-                add_children_for_short_traj(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
-            else:
-                add_children_for_Nary(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
-        else:  # Child-Sum
-            add_children_for_ChildSum(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
-
-    elif tree_type == 'out':  # out tree
-        start_index = len(trajectory) - 1
-        if cell_type == 'N-ary':
-            if len(trajectory) <= nary:
-                add_children_for_short_traj_out(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
-            else:
-                add_children_for_Nary_out(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
+    start_index = len(trajectory) - 1
+    if cell_type == 'N-ary':
+        if len(trajectory) <= nary:
+            add_children_for_short_traj(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
         else:
-            add_children_for_ChildSum(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
-
-    else:
-        print("Tree type wrong!")
+            add_children_for_Nary(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
+    else:  # Child-Sum
+        add_children_for_ChildSum(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
 
     if need_plot:
         plot_tree(tree)  # optional
