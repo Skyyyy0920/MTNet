@@ -29,6 +29,7 @@ if __name__ == '__main__':
     # ==================================================================================================
     print('\n' + '=' * 36 + ' Get experiment args ' + '=' * 36)
     args = get_args()
+    print(f"Using device: {args.device}")
     setup_seed(args.seed)  # make the experiment repeatable
 
     # ==================================================================================================
@@ -75,9 +76,6 @@ if __name__ == '__main__':
         train_df = process_for_GowallaCA(train_df)
         val_df = process_for_GowallaCA(val_df)
         test_df = process_for_GowallaCA(test_df)
-        train_df['POI_catid'] = train_df.apply(lambda x: eval(x['POI_catname'].replace(";", ","))[0]['url'], axis=1)
-        val_df['POI_catid'] = val_df.apply(lambda x: eval(x['POI_catname'].replace(";", ","))[0]['url'], axis=1)
-        test_df['POI_catid'] = test_df.apply(lambda x: eval(x['POI_catname'].replace(";", ","))[0]['url'], axis=1)
 
     # User id to index
     uid_list = [str(uid) for uid in list(set(train_df['user_id'].to_list()))]
@@ -88,11 +86,6 @@ if __name__ == '__main__':
     # Cat id to index
     cat_ids = list(set(train_df['POI_catid'].tolist()))
     cat_id2idx_dict = dict(zip(cat_ids, range(len(cat_ids))))
-    # POI index to cat index
-    POI_idx2cat_idx_dict = {}
-    for i, row in train_df.iterrows():
-        POI_idx2cat_idx_dict[POI_id2idx_dict[row['POI_id']]] = cat_id2idx_dict[row['POI_catid']]
-    map_set = (user_id2idx_dict, POI_id2idx_dict, POI_idx2cat_idx_dict)
 
     n_clusters = args.lon_parts * args.lat_parts
     max_lon, min_lon = train_df.loc[:, "longitude"].max() + 1, train_df.loc[:, "longitude"].min() - 1
@@ -112,6 +105,7 @@ if __name__ == '__main__':
     test_df['coo_label'] = test_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
 
     # Build dataset
+    map_set = (user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict)
     train_dataset = TrajectoryTrainDataset(train_df, map_set)
     val_dataset = TrajectoryValDataset(val_df, map_set)
     test_dataset = TrajectoryTestDataset(test_df, map_set)
@@ -138,9 +132,7 @@ if __name__ == '__main__':
                               time_embed_dim=args.time_embed_dim,
                               num_coos=n_clusters, coo_embed_dim=args.coo_embed_dim,
                               cell_type=args.cell_type, nary=args.nary,
-                              head_num=args.transformer_head_num, hid_dim=args.transformer_hid_dim,
-                              layer_num=args.transformer_layer_num, t_dropout=args.transformer_dropout,
-                              device=args.device).to(args.device)
+                              device=args.device).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)
@@ -168,35 +160,29 @@ if __name__ == '__main__':
     # Training loop
     for epoch in range(args.epochs):
         TreeLSTM_model.train()
-        TreeLSTM_model.POI_cell.train()
-        TreeLSTM_model.cat_cell.train()
-        TreeLSTM_model.coo_cell.train()
+        TreeLSTM_model.cell.train()
 
-        y_pred_POI_list, y_label_POI_list, loss_list = [], [], []
+        loss_list = []
 
         for b_idx, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc="Training"):
-            in_tree_batcher = []
-            out_tree_batcher = []
+            tree_batcher = []
             for trajectory in batch:
-                traj_in_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.plot_tree, 'in')
-                in_tree_batcher.append(traj_in_tree.to(args.device))
+                traj_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.plot_tree)
+                tree_batcher.append(traj_tree.to(args.device))
 
-            in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
-            in_trees = SSTBatch(graph=in_tree_batch,
-                                features=in_tree_batch.ndata["x"].to(args.device),
-                                label=in_tree_batch.ndata["y"].to(args.device))
+            tree_batch = dgl.batch(tree_batcher).to(args.device)
+            trees = SSTBatch(graph=tree_batch,
+                             features=tree_batch.ndata["x"].to(args.device),
+                             label=tree_batch.ndata["y"].to(args.device))
 
-            y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(in_trees)
+            y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(trees)
 
-            y_POI_in, y_cat_in, y_tim_in, y_coo_in = \
-                in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2], in_trees.label[:, 3]
+            y_POI, y_cat, y_tim_in, y_coo = \
+                trees.label[:, 0], trees.label[:, 1], trees.label[:, 2], trees.label[:, 3]
 
-            y_pred_POI_list.append(y_pred_POI.detach().cpu().numpy())
-            y_label_POI_list.append(y_POI_in.detach().cpu().numpy())
-
-            loss_POI = criterion_POI(y_pred_POI, y_POI_in.long())
-            loss_cat = criterion_cat(y_pred_cat, y_cat_in.long())
-            loss_coo = criterion_coo(y_pred_coo, y_coo_in.long())
+            loss_POI = criterion_POI(y_pred_POI, y_POI.long())
+            loss_cat = criterion_cat(y_pred_cat, y_cat.long())
+            loss_coo = criterion_coo(y_pred_coo, y_coo.long())
             loss = loss_POI + loss_cat + loss_coo
             loss_list.append(loss.item())
             loss.backward()
@@ -208,26 +194,9 @@ if __name__ == '__main__':
 
         lr_scheduler.step()  # update learning rate
 
-        # Measurement
-        y_pred_numpy = np.concatenate(y_pred_POI_list, axis=0)
-        y_label_numpy = np.concatenate(y_label_POI_list, axis=0)
-        acc1 = top_k_acc(y_label_numpy, y_pred_numpy, k=1)
-        acc5 = top_k_acc(y_label_numpy, y_pred_numpy, k=5)
-        acc10 = top_k_acc(y_label_numpy, y_pred_numpy, k=10)
-        acc20 = top_k_acc(y_label_numpy, y_pred_numpy, k=20)
-        # mrr = MRR_metric(batch_labels_numpy, y_pred_numpy)
-        mrr = 0
-        mAP = mAP_metric(y_label_numpy, y_pred_numpy, k=20)
-
         # Logging
         logging.info(f"************************  Training epoch: {epoch + 1}/{args.epochs}  ************************")
         logging.info(f"Current epoch's mean loss: {np.mean(loss_list)}\t\tlr: {optimizer.param_groups[0]['lr']}")
-        logging.info(f"acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}")
-        logging.info(f"mrr: {mrr}\tmAP: {mAP}\n")
-
-        # ==================================================================================================
-        # 8. Evaluation
-        # ==================================================================================================
 
         # Save model
         if (epoch + 1) % 20 == 0:
@@ -239,52 +208,55 @@ if __name__ == '__main__':
             torch.save(checkpoint, os.path.join(save_dir, f"checkpoint_{epoch + 1}.pth"))
 
         # ==================================================================================================
-        # 9. Testing
+        # 8. Testing
         # ==================================================================================================
         TreeLSTM_model.eval()
-        TreeLSTM_model.POI_cell.eval()
-        TreeLSTM_model.cat_cell.eval()
-        TreeLSTM_model.coo_cell.eval()
+        TreeLSTM_model.cell.eval()
 
         with torch.no_grad():
             y_pred_POI_list, y_label_POI_list = [], []
+            y_pred_cat_list, y_label_cat_list = [], []
+            y_pred_coo_list, y_label_coo_list = [], []
             # Start testing
             for batch in test_dataloader:
-                in_tree_batcher = []
-                out_tree_batcher = []
+                tree_batcher = []
                 for trajectory in batch:
-                    traj_in_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.plot_tree, 'in')
-                    in_tree_batcher.append(traj_in_tree.to(args.device))
+                    traj_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.plot_tree)
+                    tree_batcher.append(traj_tree.to(args.device))
 
-                in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
-                in_trees = SSTBatch(graph=in_tree_batch,
-                                    features=in_tree_batch.ndata["x"].to(args.device),
-                                    label=in_tree_batch.ndata["y"].to(args.device))
+                tree_batch = dgl.batch(tree_batcher).to(args.device)
+                trees = SSTBatch(graph=tree_batch,
+                                 features=tree_batch.ndata["x"].to(args.device),
+                                 label=tree_batch.ndata["y"].to(args.device))
 
-                y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(in_trees)
+                y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(trees)
 
-                y_POI_in, y_cat_in, y_tim_in, y_coo_in = \
-                    in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2], in_trees.label[:, 3]
+                y_POI, y_cat, y_tim_in, y_coo = \
+                    trees.label[:, 0], trees.label[:, 1], trees.label[:, 2], trees.label[:, 3]
 
                 y_pred_POI_list.append(y_pred_POI.detach().cpu().numpy())
-                y_label_POI_list.append(y_POI_in.detach().cpu().numpy())
+                y_label_POI_list.append(y_POI.detach().cpu().numpy())
+                y_pred_cat_list.append(y_pred_cat.detach().cpu().numpy())
+                y_label_cat_list.append(y_cat.detach().cpu().numpy())
+                y_pred_coo_list.append(y_pred_coo.detach().cpu().numpy())
+                y_label_coo_list.append(y_coo.detach().cpu().numpy())
 
-            # Measurement
-            y_pred_numpy = np.concatenate(y_pred_POI_list, axis=0)
-            y_label_numpy = np.concatenate(y_label_POI_list, axis=0)
-            acc1 = top_k_acc(y_label_numpy, y_pred_numpy, k=1)
-            acc5 = top_k_acc(y_label_numpy, y_pred_numpy, k=5)
-            acc10 = top_k_acc(y_label_numpy, y_pred_numpy, k=10)
-            acc20 = top_k_acc(y_label_numpy, y_pred_numpy, k=20)
-            # mrr = MRR_metric(batch_labels_numpy, y_pred_numpy)
-            mrr = 0
-            mAP = mAP_metric(y_label_numpy, y_pred_numpy, k=20)
+            y_pred_POI_numpy = np.concatenate(y_pred_POI_list, axis=0)
+            y_label_POI_numpy = np.concatenate(y_label_POI_list, axis=0)
+            y_pred_cat_numpy = np.concatenate(y_pred_cat_list, axis=0)
+            y_label_cat_numpy = np.concatenate(y_label_cat_list, axis=0)
+            y_pred_coo_numpy = np.concatenate(y_pred_coo_list, axis=0)
+            y_label_coo_numpy = np.concatenate(y_label_coo_list, axis=0)
 
             if (epoch + 1) % 20 == 0:
-                pickle.dump(y_pred_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
-                pickle.dump(y_label_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
+                pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
+                pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
 
             # Logging
             logging.info(f"================================ Testing ================================")
-            logging.info(f"acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}")
-            logging.info(f"mrr: {mrr}\tmAP: {mAP}\n")
+            acc1, acc5, acc10, acc20 = get_performance(y_label_POI_numpy, y_pred_POI_numpy)
+            logging.info(f" <POI> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}")
+            acc1, acc5, acc10, acc20 = get_performance(y_label_cat_numpy, y_pred_cat_numpy)
+            logging.info(f" <cat> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}")
+            acc1, acc5, acc10, acc20 = get_performance(y_label_coo_numpy, y_pred_coo_numpy)
+            logging.info(f" <coo> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}")
