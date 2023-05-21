@@ -1,0 +1,72 @@
+[2023-05-21 15:24:38 INFO]
+TreeLSTM(
+  (user_embedding): Embedding(1047, 128)
+  (POI_embedding): Embedding(4980, 128)
+  (cat_embedding): Embedding(318, 32)
+  (time_embedding): Embedding(24, 32)
+  (coo_embedding): Embedding(1024, 64)
+  (embed_dropout): Dropout(p=0.2, inplace=False)
+  (model_dropout): Dropout(p=0.4, inplace=False)
+  (cell): NaryTreeLSTMCell(
+    (W_f): Linear(in_features=384, out_features=512, bias=False)
+    (U_f): Linear(in_features=1536, out_features=1536, bias=False)
+    (W_iou): Linear(in_features=384, out_features=1536, bias=False)
+    (U_iou): Linear(in_features=1536, out_features=1536, bias=False)
+    (transformer_encoder): TransformerEncoder(
+      (layers): ModuleList(
+        (0-1): 2 x TransformerEncoderLayer(
+          (self_attn): MultiheadAttention(
+            (out_proj): NonDynamicallyQuantizableLinear(in_features=512, out_features=512, bias=True)
+          )
+          (linear1): Linear(in_features=512, out_features=1024, bias=True)
+          (dropout): Dropout(p=0.4, inplace=False)
+          (linear2): Linear(in_features=1024, out_features=512, bias=True)
+          (norm1): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
+          (norm2): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
+          (dropout1): Dropout(p=0.4, inplace=False)
+          (dropout2): Dropout(p=0.4, inplace=False)
+        )
+      )
+    )
+  )
+  (decoder_POI): Linear(in_features=512, out_features=4980, bias=True)
+  (decoder_cat): Linear(in_features=512, out_features=318, bias=True)
+  (decoder_coo): Linear(in_features=512, out_features=1024, bias=True)
+  (decoder_tim): Linear(in_features=512, out_features=24, bias=True)
+)
+[2023-05-21 15:24:38 INFO]
+Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    capturable: False
+    differentiable: False
+    eps: 1e-08
+    foreach: None
+    fused: None
+    initial_lr: 0.001
+    lr: 0.001
+    maximize: False
+    weight_decay: 0.0001
+)
+[2023-05-21 15:25:20 INFO]************************  Training epoch: 1/200  ************************
+[2023-05-21 15:25:20 INFO]Current epoch's mean loss: 22.51606169613925		lr: 0.001
+[2023-05-21 15:25:23 INFO]================================ Testing ================================
+[2023-05-21 15:25:24 INFO] <POI> acc@1: 0.0044411547002220575	acc@5: 0.025906735751295335	acc@10: 0.04219096965210955	acc@20: 0.0540340488527017
+[2023-05-21 15:25:24 INFO] <cat> acc@1: 0.15025906735751296	acc@5: 0.30866025166543304	acc@10: 0.4381939304219097	acc@20: 0.5914137675795706
+[2023-05-21 15:25:25 INFO] <tim> acc@1: 0.4100666173205033	acc@5: 0.6580310880829016	acc@10: 0.7772020725388601	acc@20: 0.9096965210954848
+[2023-05-21 15:25:25 INFO] <coo> acc@1: 0.4100666173205033	acc@5: 0.6580310880829016	acc@10: 0.7772020725388601	acc@20: 0.9096965210954848
+[2023-05-21 15:26:05 INFO]************************  Training epoch: 2/200  ************************
+[2023-05-21 15:26:05 INFO]Current epoch's mean loss: 19.499543883583762		lr: 0.001
+[2023-05-21 15:26:08 INFO]================================ Testing ================================
+[2023-05-21 15:26:10 INFO] <POI> acc@1: 0.027387120651369355	acc@5: 0.05551443375277572	acc@10: 0.07623982235381199	acc@20: 0.1154700222057735
+[2023-05-21 15:26:10 INFO] <cat> acc@1: 0.17246484085862324	acc@5: 0.33974833456698744	acc@10: 0.4685418208734271	acc@20: 0.6062176165803109
+[2023-05-21 15:26:10 INFO] <tim> acc@1: 0.4981495188749075	acc@5: 0.7535159141376758	acc@10: 0.846780162842339	acc@20: 0.930421909696521
+[2023-05-21 15:26:10 INFO] <coo> acc@1: 0.4981495188749075	acc@5: 0.7535159141376758	acc@10: 0.846780162842339	acc@20: 0.930421909696521
+[2023-05-21 15:26:51 INFO]************************  Training epoch: 3/200  ************************
+[2023-05-21 15:26:51 INFO]Current epoch's mean loss: 17.14282113855535		lr: 0.001
+[2023-05-21 15:26:54 INFO]================================ Testing ================================
+[2023-05-21 15:26:56 INFO] <POI> acc@1: 0.04885270170244264	acc@5: 0.10584752035529238	acc@10: 0.153960029607698	acc@20: 0.20725388601036268
+[2023-05-21 15:26:56 INFO] <cat> acc@1: 0.18726868985936343	acc@5: 0.3634344929681717	acc@10: 0.5003700962250185	acc@20: 0.6313841598815693
+[2023-05-21 15:26:56 INFO] <tim> acc@1: 0.5418208734270911	acc@5: 0.8112509252405625	acc@10: 0.8919319022945966	acc@20: 0.9452257586972613
+[2023-05-21 15:26:56 INFO] <coo> acc@1: 0.5418208734270911	acc@5: 0.8112509252405625	acc@10: 0.8919319022945966	acc@20: 0.9452257586972613

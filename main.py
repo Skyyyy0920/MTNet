@@ -87,6 +87,11 @@ if __name__ == '__main__':
     cat_ids = list(set(train_df['POI_catid'].tolist()))
     cat_id2idx_dict = dict(zip(cat_ids, range(len(cat_ids))))
 
+    num_users = len(user_id2idx_dict)
+    num_POIs = len(POI_id2idx_dict)
+    num_cats = len(cat_id2idx_dict)
+    print(f"users: {num_users}, POIs: {num_POIs}, cats: {num_cats}")
+
     n_clusters = args.lon_parts * args.lat_parts
     max_lon, min_lon = train_df.loc[:, "longitude"].max() + 1, train_df.loc[:, "longitude"].min() - 1
     max_lat, min_lat = train_df.loc[:, "latitude"].max() + 1, train_df.loc[:, "latitude"].min() - 1
@@ -121,9 +126,7 @@ if __name__ == '__main__':
     # 5. Build models, define overall loss and optimizer
     # ==================================================================================================
     print('\n' + '=' * 36 + ' Build models ' + '=' * 36)
-    num_users = len(user_id2idx_dict)
-    num_POIs = len(POI_id2idx_dict)
-    num_cats = len(cat_id2idx_dict)
+
     TreeLSTM_model = TreeLSTM(h_size=args.h_size,
                               embed_dropout=args.embed_dropout, model_dropout=args.model_dropout,
                               num_users=num_users, user_embed_dim=args.user_embed_dim,
