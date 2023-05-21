@@ -21,8 +21,8 @@ def get_args():
     # Data
     parser.add_argument('--dataset',
                         type=str,
-                        # default='TKY',
-                        default='NYC',
+                        default='TKY',
+                        # default='NYC',
                         # default='Gowalla-CA',
                         help='Dataset name')
 
@@ -34,7 +34,7 @@ def get_args():
                         help='TreeLSTM cell type')
     parser.add_argument('--nary',
                         type=int,
-                        default=3,
+                        default=5,
                         help='n-ary tree')  # 3
     parser.add_argument('--user_embed_dim',
                         type=int,

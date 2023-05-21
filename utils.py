@@ -108,6 +108,7 @@ def process_for_GowallaCA(df):
     df.insert(loc=10, column='day_of_week', value=0)
     df = df[df['POI_catname'] != 'dummy']
     df.rename(columns={'checkin_time': 'local_time'}, inplace=True)
+    df['POI_catid'] = df.apply(lambda x: eval(x['POI_catname'].replace(";", ","))[0]['url'], axis=1)
     return df
 
 
