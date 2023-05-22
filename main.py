@@ -39,14 +39,14 @@ if __name__ == '__main__':
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
     logging_time = time.strftime('%m-%d_%H-%M', time.localtime())
-    save_dir = os.path.join(args.save_path, args.dataset + '_' + str(args.nary) + '-ary_' + logging_time)
+    save_dir = os.path.join(args.save_path, f"{args.dataset}_{args.nary}-ary_{logging_time}")
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     print(f"Saving path: {save_dir}")
     logging.basicConfig(level=logging.INFO,
                         format='[%(asctime)s %(levelname)s]%(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S',
-                        filename=os.path.join(save_dir, 'running.log'))
+                        filename=os.path.join(save_dir, f'{args.dataset}_{args.nary}.log'))
     console = logging.StreamHandler()  # Simultaneously output to console
     console.setLevel(logging.INFO)
     console.setFormatter(logging.Formatter(fmt='[%(asctime)s %(levelname)s]%(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
