@@ -12,7 +12,7 @@ from config import *
 from dataset import *
 
 SSTBatch = collections.namedtuple(
-    "SSTBatch", ["graph", "features", "label"]
+    "SSTBatch", ["graph", "features", "label", "mask"]
 )
 
 
@@ -179,11 +179,13 @@ if __name__ == '__main__':
             in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
             in_trees = SSTBatch(graph=in_tree_batch,
                                 features=in_tree_batch.ndata["x"].to(args.device),
-                                label=in_tree_batch.ndata["y"].to(args.device))
+                                label=in_tree_batch.ndata["y"].to(args.device),
+                                mask=in_tree_batch.ndata["mask"].to(args.device))
             out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
             out_trees = SSTBatch(graph=out_tree_batch,
                                  features=out_tree_batch.ndata["x"].to(args.device),
-                                 label=out_tree_batch.ndata["y"].to(args.device))
+                                 label=out_tree_batch.ndata["y"].to(args.device),
+                                 mask=out_tree_batch.ndata["mask"].to(args.device))
 
             y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
                 TreeLSTM_model(in_trees, out_trees)
@@ -235,19 +237,21 @@ if __name__ == '__main__':
             for batch in test_dataloader:
                 in_tree_batcher, out_tree_batcher = [], []
                 for trajectory in batch:
-                    traj_in_tree = construct_dgl_test_tree(trajectory, args.cell_type, args.nary, args.plot_tree, 'in')
+                    traj_in_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.plot_tree, 'in')
                     in_tree_batcher.append(traj_in_tree.to(args.device))
-                    traj_out_tree = construct_dgl_test_tree(trajectory, args.cell_type, args.nary, args.plot_tree, 'out')
+                    traj_out_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.plot_tree, 'out')
                     out_tree_batcher.append(traj_out_tree.to(args.device))
 
                 in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
                 in_trees = SSTBatch(graph=in_tree_batch,
                                     features=in_tree_batch.ndata["x"].to(args.device),
-                                    label=in_tree_batch.ndata["y"].to(args.device))
+                                    label=in_tree_batch.ndata["y"].to(args.device),
+                                    mask=in_tree_batch.ndata["mask"].to(args.device))
                 out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
                 out_trees = SSTBatch(graph=out_tree_batch,
                                      features=out_tree_batch.ndata["x"].to(args.device),
-                                     label=out_tree_batch.ndata["y"].to(args.device))
+                                     label=out_tree_batch.ndata["y"].to(args.device),
+                                     mask=out_tree_batch.ndata["mask"].to(args.device))
 
                 y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
                     TreeLSTM_model(in_trees, out_trees)
