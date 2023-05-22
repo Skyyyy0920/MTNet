@@ -110,7 +110,7 @@ def add_children(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
     """
     node = trajectory[index]
     idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], x=node['features'], y=node['labels'], mask=[1] * 5)
+    tree.add_node(idx2idx_dict[index], x=node['features'], y=node['labels'], mask=1)
 
     if index > 0 and flag_dict[index]:
         flag_dict[index] = 0  # already play as parent node
@@ -120,7 +120,7 @@ def add_children(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
                 tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
             else:  # fictitious node
                 node_id = tree.number_of_nodes()
-                tree.add_node(node_id, x=trajectory[0]['features'], y=[-1] * 4, mask=[0] * 5)
+                tree.add_node(node_id, x=trajectory[0]['features'], y=[-1] * 4, mask=0)
                 tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
     return
 
@@ -130,14 +130,14 @@ def add_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
     max_index = re_index
     node = trajectory[re_index]
     idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], x=node['features'], y=node['labels'], mask=[1] * 5)
+    tree.add_node(idx2idx_dict[index], x=node['features'], y=node['labels'], mask=1)
 
     if index > 0 and flag_dict[index]:
         flag_dict[index] = 0  # already play as parent node
         for i in range(nary, 0, -1):
             if index - i < 0:  # fictitious node
                 node_id = tree.number_of_nodes()
-                tree.add_node(node_id, x=trajectory[-1]['features'], y=[-1] * 4, mask=[0] * 5)
+                tree.add_node(node_id, x=trajectory[-1]['features'], y=[-1] * 4, mask=0)
                 tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
                 max_index = len(trajectory) - 1
             else:
@@ -146,7 +146,7 @@ def add_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
                 tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
 
     # change node label
-    tree.add_node(idx2idx_dict[index], x=node['features'], y=trajectory[max_index]['labels'], mask=[1] * 5)
+    tree.add_node(idx2idx_dict[index], x=node['features'], y=trajectory[max_index]['labels'], mask=1)
     return max_index
 
 
