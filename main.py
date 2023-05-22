@@ -202,7 +202,7 @@ if __name__ == '__main__':
         logging.info(f"Current epoch's mean loss: {np.mean(loss_list)}\t\tlr: {optimizer.param_groups[0]['lr']}")
 
         # Save model
-        if (epoch + 1) % 20 == 0:
+        if (epoch + 1) % 30 == 0:
             checkpoint = {
                 'model_state': TreeLSTM_model.state_dict(),
                 'optimizer_state': optimizer.state_dict(),
@@ -244,14 +244,11 @@ if __name__ == '__main__':
                 y_pred_coo_list.append(y_pred_coo.detach().cpu().numpy())
                 y_label_coo_list.append(y_coo.detach().cpu().numpy())
 
-            y_pred_POI_numpy = np.concatenate(y_pred_POI_list, axis=0)
-            y_label_POI_numpy = np.concatenate(y_label_POI_list, axis=0)
-            y_pred_cat_numpy = np.concatenate(y_pred_cat_list, axis=0)
-            y_label_cat_numpy = np.concatenate(y_label_cat_list, axis=0)
-            y_pred_coo_numpy = np.concatenate(y_pred_coo_list, axis=0)
-            y_label_coo_numpy = np.concatenate(y_label_coo_list, axis=0)
+            y_label_POI_numpy, y_pred_POI_numpy = get_pred_label(y_label_POI_list, y_pred_POI_list)
+            y_label_cat_numpy, y_pred_cat_numpy = get_pred_label(y_label_cat_list, y_pred_cat_list)
+            y_label_coo_numpy, y_pred_coo_numpy = get_pred_label(y_label_coo_list, y_pred_coo_list)
 
-            if (epoch + 1) % 20 == 0:
+            if (epoch + 1) % 30 == 0:
                 pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
                 pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
 

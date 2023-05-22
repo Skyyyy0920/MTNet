@@ -65,6 +65,15 @@ def get_performance(y_true_seq, y_pred_seq):
     return acc[0], acc[1], acc[2], acc[3]
 
 
+def get_pred_label(y_label_list, y_pred_list):
+    y_label_POI_numpy = np.concatenate(y_label_list, axis=0)
+    y_pred_POI_numpy = np.concatenate(y_pred_list, axis=0)
+    none_label = np.where(y_label_POI_numpy == -1)
+    y_label_POI_numpy = np.delete(y_label_POI_numpy, none_label)
+    y_pred_POI_numpy = np.delete(y_pred_POI_numpy, none_label)
+    return y_label_POI_numpy, y_pred_POI_numpy
+
+
 def mAP_metric(y_true_seq, y_pred_seq, k):
     """
     AP: area under PR curve
