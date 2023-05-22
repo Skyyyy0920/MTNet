@@ -92,30 +92,48 @@ class TreeLSTM(nn.Module):
         self.cat_embedding = nn.Embedding(num_embeddings=num_cats, embedding_dim=cat_embed_dim)
         self.time_embedding = nn.Embedding(num_embeddings=24, embedding_dim=time_embed_dim)
         self.coo_embedding = nn.Embedding(num_embeddings=num_coos, embedding_dim=coo_embed_dim)
+        self.user_embedding_o = nn.Embedding(num_embeddings=num_users, embedding_dim=user_embed_dim)
+        self.POI_embedding_o = nn.Embedding(num_embeddings=num_POIs, embedding_dim=POI_embed_dim)
+        self.cat_embedding_o = nn.Embedding(num_embeddings=num_cats, embedding_dim=cat_embed_dim)
+        self.time_embedding_o = nn.Embedding(num_embeddings=24, embedding_dim=time_embed_dim)
+        self.coo_embedding_o = nn.Embedding(num_embeddings=num_coos, embedding_dim=coo_embed_dim)
         # dropout
         self.embed_dropout = nn.Dropout(embed_dropout)
         self.model_dropout = nn.Dropout(model_dropout)
         # cell
         if cell_type == 'N-ary':
             self.cell = NaryTreeLSTMCell(self.embedding_dim, h_size, nary)
+            self.cell_o = NaryTreeLSTMCell(self.embedding_dim, h_size, nary)
         else:
             self.cell = ChildSumTreeLSTMCell(self.embedding_dim, h_size)
         # decoder
         self.decoder_POI = nn.Linear(h_size, num_POIs)
         self.decoder_cat = nn.Linear(h_size, num_cats)
         self.decoder_coo = nn.Linear(h_size, num_coos)
+        self.decoder_POI_o = nn.Linear(h_size, num_POIs)
+        self.decoder_cat_o = nn.Linear(h_size, num_cats)
+        self.decoder_coo_o = nn.Linear(h_size, num_coos)
 
-    def forward(self, trees):
-        user_embedding = self.user_embedding(trees.features[:, 0].long())
-        POI_embedding = self.POI_embedding(trees.features[:, 1].long())
-        cat_embedding = self.cat_embedding(trees.features[:, 2].long())
-        time_embedding = self.time_embedding(trees.features[:, 3].long())
-        coo_embedding = self.coo_embedding(trees.features[:, 4].long())
+    def forward(self, in_trees, out_trees):
+        user_embedding = self.user_embedding(in_trees.features[:, 0].long())
+        POI_embedding = self.POI_embedding(in_trees.features[:, 1].long())
+        cat_embedding = self.cat_embedding(in_trees.features[:, 2].long())
+        time_embedding = self.time_embedding(in_trees.features[:, 3].long())
+        coo_embedding = self.coo_embedding(in_trees.features[:, 4].long())
         concat_embedding = torch.cat(
             (user_embedding, POI_embedding, cat_embedding, time_embedding, coo_embedding),
             dim=1)  # concat -> [batch_size, embedding_dim]
 
-        g = trees.graph.to(self.device)
+        user_embedding_o = self.user_embedding_o(out_trees.features[:, 0].long())
+        POI_embedding_o = self.POI_embedding_o(out_trees.features[:, 1].long())
+        cat_embedding_o = self.cat_embedding_o(out_trees.features[:, 2].long())
+        time_embedding_o = self.time_embedding_o(out_trees.features[:, 3].long())
+        coo_embedding_o = self.coo_embedding_o(out_trees.features[:, 4].long())
+        concat_embedding_o = torch.cat(
+            (user_embedding_o, POI_embedding_o, cat_embedding_o, time_embedding_o, coo_embedding_o),
+            dim=1)  # concat -> [batch_size, embedding_dim]
+
+        g = in_trees.graph.to(self.device)
         n = g.num_nodes()
         g.ndata["iou"] = self.cell.W_iou(self.embed_dropout(concat_embedding))  # [batch_size, nary * h_size]
         g.ndata["x"] = self.embed_dropout(concat_embedding)  # [batch_size, embedding_dim]
@@ -135,4 +153,24 @@ class TreeLSTM(nn.Module):
         y_pred_cat = self.decoder_cat(h)
         y_pred_coo = self.decoder_coo(h)
 
-        return y_pred_POI, y_pred_cat, y_pred_coo
+        g_o = out_trees.graph.to(self.device)
+        n = g_o.num_nodes()
+        g_o.ndata["iou"] = self.cell_o.W_iou(self.embed_dropout(concat_embedding_o))  # [batch_size, nary * h_size]
+        g_o.ndata["x"] = self.embed_dropout(concat_embedding_o)  # [batch_size, embedding_dim]
+        g_o.ndata["h"] = torch.zeros((n, self.h_size)).to(self.device)
+        g_o.ndata["c"] = torch.zeros((n, self.h_size)).to(self.device)
+        g_o.ndata["h_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
+        g_o.ndata["c_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
+
+        dgl.prop_nodes_topo(graph=g_o,
+                            message_func=self.cell_o.message_func,
+                            reduce_func=self.cell_o.reduce_func,
+                            apply_node_func=self.cell_o.apply_node_func)
+
+        h_o = self.model_dropout(g_o.ndata.pop("h"))  # [batch_size, h_size]
+
+        y_pred_POI_o = self.decoder_POI_o(h_o)
+        y_pred_cat_o = self.decoder_cat_o(h_o)
+        y_pred_coo_o = self.decoder_coo_o(h_o)
+
+        return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o

@@ -34,7 +34,7 @@ def get_args():
                         help='TreeLSTM cell type')
     parser.add_argument('--nary',
                         type=int,
-                        default=3,
+                        default=1,
                         help='n-ary tree')  # 3
     parser.add_argument('--user_embed_dim',
                         type=int,

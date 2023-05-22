@@ -45,6 +45,7 @@ class TrajectoryValDataset(Dataset):
         data_df['user_id'] = data_df['user_id'].astype(str)
         data_df = data_df[data_df['user_id'].isin(user_id2idx_dict.keys())]
         data_df = data_df[data_df['POI_id'].isin(POI_id2idx_dict.keys())]  # Do the same as GETNext
+        data_df = data_df[data_df['POI_catid'].isin(cat_id2idx_dict.keys())]
         data_df = data_df.groupby(['trajectory_id']).filter(lambda x: len(x) > 2)
 
         data_df['local_time'] = pd.to_datetime(data_df['local_time'])  # convert time column to datetime format
@@ -83,6 +84,7 @@ class TrajectoryTestDataset(Dataset):
         data_df['user_id'] = data_df['user_id'].astype(str)
         data_df = data_df[data_df['user_id'].isin(user_id2idx_dict.keys())]
         data_df = data_df[data_df['POI_id'].isin(POI_id2idx_dict.keys())]  # Do the same as GETNext
+        data_df = data_df[data_df['POI_catid'].isin(cat_id2idx_dict.keys())]
         data_df = data_df.groupby(['trajectory_id']).filter(lambda x: len(x) > 2)
 
         data_df['local_time'] = pd.to_datetime(data_df['local_time'])  # convert time column to datetime format
