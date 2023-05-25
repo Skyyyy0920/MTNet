@@ -58,11 +58,25 @@ def top_k_acc(y_true_seq, y_pred_seq, k):
     return hit / count
 
 
+def MRR_metric(y_true_seq, y_pred_seq):
+    rlt = 0
+    count = 0
+    for y_true, y_pred in zip(y_true_seq, y_pred_seq):
+        if y_true == -1:
+            continue
+        rec_list = y_pred.argsort()[-len(y_pred):][::-1]
+        r_idx = np.where(rec_list == y_true)[0][0]
+        rlt += 1 / (r_idx + 1)
+        count += 1
+    return rlt / count
+
+
 def get_performance(y_true_seq, y_pred_seq):
     acc = []
     for k in [1, 5, 10, 20]:
         acc.append(top_k_acc(y_true_seq, y_pred_seq, k))
-    return acc[0], acc[1], acc[2], acc[3]
+    mrr = MRR_metric(y_true_seq, y_pred_seq)
+    return acc[0], acc[1], acc[2], acc[3], mrr
 
 
 def get_pred_label(y_label_list, y_pred_list):
