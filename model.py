@@ -3,39 +3,9 @@ import torch
 import torch.nn as nn
 
 
-class ChildSumTreeLSTMCell(nn.Module):
-    def __init__(self, embedding_dim, h_size):
-        super(ChildSumTreeLSTMCell, self).__init__()
-        self.W_f = nn.Linear(embedding_dim, h_size, bias=False)  # W_f -> [embedding_dim, h_size]
-        self.U_f = nn.Linear(h_size, h_size, bias=False)
-        self.b_f = nn.Parameter(torch.zeros(1, h_size))
-        self.W_iou = nn.Linear(embedding_dim, 3 * h_size, bias=False)
-        self.U_iou = nn.Linear(h_size, 3 * h_size, bias=False)
-        self.b_iou = nn.Parameter(torch.zeros(1, 3 * h_size))
-
-    def apply_node_func(self, nodes):
-        iou = nodes.data["iou"]
-        i, o, u = torch.chunk(iou, 3, 1)
-        i, o, u = torch.sigmoid(i), torch.sigmoid(o), torch.tanh(u)
-        c = i * u + nodes.data["c"]  # [batch, h_size]
-        h = o * torch.tanh(c)
-        return {"h": h, "c": c}
-
-    def message_func(self, edges):
-        return {"h_child": edges.src["h"], "c_child": edges.src["c"]}
-
-    def reduce_func(self, nodes):
-        # h_cat_att = self.transformer_encoder(nodes.mailbox["h_child"])
-        h_sum = torch.sum(nodes.mailbox["h_child"], 1)
-        f = torch.sigmoid(self.W_f(nodes.data["x"]) + self.U_f(h_sum) + self.b_f)
-        iou = self.W_iou(nodes.data["x"]) + self.U_iou(h_sum) + self.b_iou  # [batch, 3 * h_size]
-        c = torch.sum(f * nodes.mailbox["c_child"], 1)
-        return {"c": c, "iou": iou}
-
-
-class NaryTreeLSTMCell(nn.Module):
+class Cell(nn.Module):
     def __init__(self, embedding_dim, h_size, nary):
-        super(NaryTreeLSTMCell, self).__init__()
+        super(Cell, self).__init__()
         self.nary = nary
         self.W_f = nn.Linear(embedding_dim, h_size, bias=False)  # W_f -> [embedding_dim, h_size]
         self.U_f = nn.Linear(nary * h_size, nary * h_size, bias=False)
@@ -80,8 +50,7 @@ class TreeLSTM(nn.Module):
                  num_cats=300, cat_embed_dim=32,
                  time_embed_dim=32,
                  num_coos=1024, coo_embed_dim=64,
-                 cell_type='N-ary', nary=3,
-                 device='cuda'):
+                 nary=3, device='cuda'):
         super(TreeLSTM, self).__init__()
         self.device = device
         self.h_size = h_size
@@ -102,12 +71,8 @@ class TreeLSTM(nn.Module):
         self.embed_dropout = nn.Dropout(embed_dropout)
         self.model_dropout = nn.Dropout(model_dropout)
         # cell
-        if cell_type == 'N-ary':
-            self.cell = NaryTreeLSTMCell(self.embedding_dim, h_size, nary)
-            self.cell_o = NaryTreeLSTMCell(self.embedding_dim, h_size, nary)
-        else:
-            self.cell = ChildSumTreeLSTMCell(self.embedding_dim, h_size)
-            self.cell_o = ChildSumTreeLSTMCell(self.embedding_dim, h_size)
+        self.cell = Cell(self.embedding_dim, h_size, nary)
+        self.cell_o = Cell(self.embedding_dim, h_size, nary)
         # decoder
         self.decoder_POI = nn.Linear(h_size, num_POIs)
         self.decoder_cat = nn.Linear(h_size, num_cats)

@@ -31,18 +31,6 @@ def increment_path(path, exist_ok=True, sep=''):
         return f"{path}{sep}{n}"  # update path
 
 
-def create_mapping_matrix(df, POI_id2idx_dict, cat_id2idx_dict):
-    n, m = len(cat_id2idx_dict), len(POI_id2idx_dict)
-    mapping_matrix = np.zeros((n, m))
-    for index, row in df.iterrows():
-        POI_idx = POI_id2idx_dict[row['POI_id']]
-        cat_idx = cat_id2idx_dict[row['POI_catid']]
-        mapping_matrix[cat_idx][POI_idx] = 1
-    for i in range(n):
-        mapping_matrix[i] = mapping_matrix[i] / np.sum(mapping_matrix[i])
-    return mapping_matrix
-
-
 def top_k_acc(y_true_seq, y_pred_seq, k):
     hit = 0
     count = 0
@@ -164,7 +152,7 @@ def add_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
     return max_index
 
 
-def construct_dgl_tree(trajectory, cell_type, nary, need_plot, tree_type):
+def construct_dgl_tree(trajectory, nary, need_plot, tree_type):
     tree = nx.DiGraph()
     idx2idx_dict = {}
     flag_dict = dict(zip(range(len(trajectory)), np.ones(len(trajectory))))

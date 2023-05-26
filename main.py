@@ -134,8 +134,7 @@ if __name__ == '__main__':
                               num_cats=num_cats, cat_embed_dim=args.cat_embed_dim,
                               time_embed_dim=args.time_embed_dim,
                               num_coos=n_clusters, coo_embed_dim=args.coo_embed_dim,
-                              cell_type=args.cell_type, nary=args.nary,
-                              device=args.device).to(device=args.device)
+                              nary=args.nary, device=args.device).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)
@@ -171,9 +170,9 @@ if __name__ == '__main__':
         for b_idx, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc="Training"):
             in_tree_batcher, out_tree_batcher = [], []
             for trajectory in batch:
-                traj_in_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.plot_tree, 'in')
+                traj_in_tree = construct_dgl_tree(trajectory, args.nary, args.plot_tree, 'in')
                 in_tree_batcher.append(traj_in_tree.to(args.device))
-                traj_out_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.plot_tree, 'out')
+                traj_out_tree = construct_dgl_tree(trajectory, args.nary, args.plot_tree, 'out')
                 out_tree_batcher.append(traj_out_tree.to(args.device))
 
             in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
@@ -237,9 +236,9 @@ if __name__ == '__main__':
             for batch in test_dataloader:
                 in_tree_batcher, out_tree_batcher = [], []
                 for trajectory in batch:
-                    traj_in_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.plot_tree, 'in')
+                    traj_in_tree = construct_dgl_tree(trajectory, args.nary, args.plot_tree, 'in')
                     in_tree_batcher.append(traj_in_tree.to(args.device))
-                    traj_out_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.plot_tree, 'out')
+                    traj_out_tree = construct_dgl_tree(trajectory, args.nary, args.plot_tree, 'out')
                     out_tree_batcher.append(traj_out_tree.to(args.device))
 
                 in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
