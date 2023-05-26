@@ -27,14 +27,9 @@ def get_args():
                         help='Dataset name')
 
     # Model hyper-parameters
-    parser.add_argument('--cell_type',
-                        type=str,
-                        default='N-ary',
-                        # default='Child-Sum',
-                        help='TreeLSTM cell type')
     parser.add_argument('--nary',
                         type=int,
-                        default=1,
+                        default=3,
                         help='n-ary tree')  # 3
     parser.add_argument('--user_embed_dim',
                         type=int,
@@ -62,7 +57,7 @@ def get_args():
                         help='latitude part number')
     parser.add_argument('--coo_embed_dim',
                         type=int,
-                        default=64,
+                        default=32,
                         help='Coordinate embedding dimensions')
     parser.add_argument('--embed_dropout',
                         type=float,
@@ -88,15 +83,15 @@ def get_args():
                         help='Gradient accumulation to solve the GPU memory problem')
     parser.add_argument('--epochs',
                         type=int,
-                        default=200,
-                        help='Number of epochs to train')  # 50
+                        default=120,
+                        help='Number of epochs to train')  # 60
     parser.add_argument('--lr',
                         type=float,
                         default=1e-3,
                         help='Initial learning rate')
     parser.add_argument('--lr_step_size',
                         type=int,
-                        default=8,
+                        default=6,
                         help='Learning rate scheduler factor')
     parser.add_argument('--lr_gamma',
                         type=float,

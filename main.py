@@ -12,7 +12,7 @@ from config import *
 from dataset import *
 
 SSTBatch = collections.namedtuple(
-    "SSTBatch", ["graph", "features", "label"]
+    "SSTBatch", ["graph", "features", "label", "mask"]
 )
 
 
@@ -134,8 +134,7 @@ if __name__ == '__main__':
                               num_cats=num_cats, cat_embed_dim=args.cat_embed_dim,
                               time_embed_dim=args.time_embed_dim,
                               num_coos=n_clusters, coo_embed_dim=args.coo_embed_dim,
-                              cell_type=args.cell_type, nary=args.nary,
-                              device=args.device).to(device=args.device)
+                              nary=args.nary, device=args.device).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)
@@ -171,19 +170,21 @@ if __name__ == '__main__':
         for b_idx, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc="Training"):
             in_tree_batcher, out_tree_batcher = [], []
             for trajectory in batch:
-                traj_in_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.plot_tree, 'in')
+                traj_in_tree = construct_dgl_tree(trajectory, args.nary, args.plot_tree, 'in')
                 in_tree_batcher.append(traj_in_tree.to(args.device))
-                traj_out_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.plot_tree, 'out')
+                traj_out_tree = construct_dgl_tree(trajectory, args.nary, args.plot_tree, 'out')
                 out_tree_batcher.append(traj_out_tree.to(args.device))
 
             in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
             in_trees = SSTBatch(graph=in_tree_batch,
                                 features=in_tree_batch.ndata["x"].to(args.device),
-                                label=in_tree_batch.ndata["y"].to(args.device))
+                                label=in_tree_batch.ndata["y"].to(args.device),
+                                mask=in_tree_batch.ndata["mask"].to(args.device))
             out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
             out_trees = SSTBatch(graph=out_tree_batch,
                                  features=out_tree_batch.ndata["x"].to(args.device),
-                                 label=out_tree_batch.ndata["y"].to(args.device))
+                                 label=out_tree_batch.ndata["y"].to(args.device),
+                                 mask=out_tree_batch.ndata["mask"].to(args.device))
 
             y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
                 TreeLSTM_model(in_trees, out_trees)
@@ -212,7 +213,7 @@ if __name__ == '__main__':
         logging.info(f"Current epoch's mean loss: {np.mean(loss_list)}\t\tlr: {optimizer.param_groups[0]['lr']}")
 
         # Save model
-        if (epoch + 1) % 30 == 0:
+        if (epoch + 1) % 60 == 0:
             checkpoint = {
                 'model_state': TreeLSTM_model.state_dict(),
                 'optimizer_state': optimizer.state_dict(),
@@ -235,19 +236,21 @@ if __name__ == '__main__':
             for batch in test_dataloader:
                 in_tree_batcher, out_tree_batcher = [], []
                 for trajectory in batch:
-                    traj_in_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.plot_tree, 'in')
+                    traj_in_tree = construct_dgl_tree(trajectory, args.nary, args.plot_tree, 'in')
                     in_tree_batcher.append(traj_in_tree.to(args.device))
-                    traj_out_tree = construct_dgl_tree(trajectory, args.cell_type, args.nary, args.plot_tree, 'out')
+                    traj_out_tree = construct_dgl_tree(trajectory, args.nary, args.plot_tree, 'out')
                     out_tree_batcher.append(traj_out_tree.to(args.device))
 
                 in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
                 in_trees = SSTBatch(graph=in_tree_batch,
                                     features=in_tree_batch.ndata["x"].to(args.device),
-                                    label=in_tree_batch.ndata["y"].to(args.device))
+                                    label=in_tree_batch.ndata["y"].to(args.device),
+                                    mask=in_tree_batch.ndata["mask"].to(args.device))
                 out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
                 out_trees = SSTBatch(graph=out_tree_batch,
                                      features=out_tree_batch.ndata["x"].to(args.device),
-                                     label=out_tree_batch.ndata["y"].to(args.device))
+                                     label=out_tree_batch.ndata["y"].to(args.device),
+                                     mask=out_tree_batch.ndata["mask"].to(args.device))
 
                 y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
                     TreeLSTM_model(in_trees, out_trees)
@@ -269,15 +272,15 @@ if __name__ == '__main__':
             y_label_cat_numpy, y_pred_cat_numpy = get_pred_label(y_label_cat_list, y_pred_cat_list)
             y_label_coo_numpy, y_pred_coo_numpy = get_pred_label(y_label_coo_list, y_pred_coo_list)
 
-            if (epoch + 1) % 30 == 0:
+            if (epoch + 1) % 60 == 0:
                 pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
                 pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
 
             # Logging
             logging.info(f"================================ Testing ================================")
-            acc1, acc5, acc10, acc20 = get_performance(y_label_POI_numpy, y_pred_POI_numpy)
-            logging.info(f" <POI> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}")
-            acc1, acc5, acc10, acc20 = get_performance(y_label_cat_numpy, y_pred_cat_numpy)
-            logging.info(f" <cat> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}")
-            acc1, acc5, acc10, acc20 = get_performance(y_label_coo_numpy, y_pred_coo_numpy)
-            logging.info(f" <coo> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}")
+            acc1, acc5, acc10, acc20, mrr = get_performance(y_label_POI_numpy, y_pred_POI_numpy)
+            logging.info(f" <POI> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}\tmrr: {mrr}")
+            acc1, acc5, acc10, acc20, mrr = get_performance(y_label_cat_numpy, y_pred_cat_numpy)
+            logging.info(f" <POI> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}\tmrr: {mrr}")
+            acc1, acc5, acc10, acc20, mrr = get_performance(y_label_coo_numpy, y_pred_coo_numpy)
+            logging.info(f" <POI> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}\tmrr: {mrr}")
