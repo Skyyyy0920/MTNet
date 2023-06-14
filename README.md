@@ -4,5 +4,16 @@ This is the implementation for our paper [Mobility Tree Network for Next POI Rec
 
 ## Citing our work
 ```bibtex
-
+...
 ```
+
+## Requirements
+```
+pip install -r requirements.txt
+```
+
+## Training
+...
+
+## Validation
+...
