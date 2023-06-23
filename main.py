@@ -72,6 +72,47 @@ if __name__ == '__main__':
     val_df = pd.read_csv(f'dataset/{args.dataset}/{args.dataset}_val.csv')
     test_df = pd.read_csv(f'dataset/{args.dataset}/{args.dataset}_test.csv')
 
+    # with open('dataset/NYC/NYC_train.csv', 'r') as f:
+    #     checkin = f.readlines()
+    # checkin = checkin[1:]
+    # # poi_data = {}
+    # traj_data = []
+    # for i in checkin:
+    #     data = i.replace('\n', '').split(',')
+    #     traj = str(data[12])
+    #     traj_data.append(traj.split('_'))
+    # uesr = {}
+    # for i in range(len(traj_data)):
+    #     if not (int(traj_data[i][0]) in uesr):
+    #         uesr[int(traj_data[i][0])] = int(traj_data[i][1])
+    #     elif uesr[int(traj_data[i][0])] < int(traj_data[i][1]):
+    #         uesr[int(traj_data[i][0])] = int(traj_data[i][1])
+    # count = 0
+    # user_ids = []
+    # for k in uesr.keys():
+    #     if uesr[k] < 13:
+    #         count += 1
+    #         user_ids.append(k)
+    # print(count)
+    # print(len(user_ids))
+    # print(user_ids)
+    # test_df = test_df[test_df['user_id'].isin(user_ids)]
+
+    # grouped_train_df = train_df.groupby('user_id')
+    # user_ids = []
+    # for user_id, group in grouped_train_df:
+    #     # if 4 <= len(group.groupby('trajectory_id')) <= 20:
+    #     # if len(group.groupby('trajectory_id')) > 25:
+    #     # if len(group.groupby('trajectory_id')) < 6:
+    #     # if len(group.groupby('trajectory_id')) > 41:
+    #     # if 13 <= len(group.groupby('trajectory_id')) <= 41:
+    #     if len(group.groupby('trajectory_id')) < 13:
+    #     # if len(group) > 41:
+    #         user_ids.append(user_id)
+    # print(len(user_ids))
+    # print(user_ids)
+    # test_df = test_df[test_df['user_id'].isin(user_ids)]
+
     if args.dataset == 'Gowalla-CA':
         train_df = process_for_GowallaCA(train_df)
         val_df = process_for_GowallaCA(val_df)
@@ -213,7 +254,7 @@ if __name__ == '__main__':
         logging.info(f"Current epoch's mean loss: {np.mean(loss_list)}\t\tlr: {optimizer.param_groups[0]['lr']}")
 
         # Save model
-        if (epoch + 1) % 60 == 0:
+        if (epoch + 1) % 600 == 0:
             checkpoint = {
                 'model_state': TreeLSTM_model.state_dict(),
                 'optimizer_state': optimizer.state_dict(),
@@ -272,7 +313,7 @@ if __name__ == '__main__':
             y_label_cat_numpy, y_pred_cat_numpy = get_pred_label(y_label_cat_list, y_pred_cat_list)
             y_label_coo_numpy, y_pred_coo_numpy = get_pred_label(y_label_coo_list, y_pred_coo_list)
 
-            if (epoch + 1) % 60 == 0:
+            if (epoch + 1) % 600 == 0:
                 pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
                 pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
 
@@ -281,6 +322,6 @@ if __name__ == '__main__':
             acc1, acc5, acc10, acc20, mrr = get_performance(y_label_POI_numpy, y_pred_POI_numpy)
             logging.info(f" <POI> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}\tmrr: {mrr}")
             acc1, acc5, acc10, acc20, mrr = get_performance(y_label_cat_numpy, y_pred_cat_numpy)
-            logging.info(f" <POI> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}\tmrr: {mrr}")
+            logging.info(f" <cat> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}\tmrr: {mrr}")
             acc1, acc5, acc10, acc20, mrr = get_performance(y_label_coo_numpy, y_pred_coo_numpy)
-            logging.info(f" <POI> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}\tmrr: {mrr}")
+            logging.info(f" <coo> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}\tmrr: {mrr}")

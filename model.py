@@ -14,8 +14,8 @@ class Cell(nn.Module):
         self.U_iou = nn.Linear(nary * h_size, 3 * h_size, bias=False)
         self.b_iou = nn.Parameter(torch.zeros(1, 3 * h_size))
         # Transformer encoder
-        # encoder_layers = nn.TransformerEncoderLayer(h_size, 2, 1024, 0.4)
-        # self.transformer_encoder = nn.TransformerEncoder(encoder_layers, 2)
+        encoder_layers = nn.TransformerEncoderLayer(h_size, 2, 1024, 0.4)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layers, 2)
 
     def apply_node_func(self, nodes):
         iou = nodes.data["iou"]
@@ -34,8 +34,7 @@ class Cell(nn.Module):
         h_cat = nodes.mailbox["h_child"]  # [batch, nary, h_size]
         h_cat = h_cat.view(h_cat.size(0), -1)  # [batch, nary * h_size]
         f = torch.sigmoid(Wx + self.U_f(h_cat) + b_f)
-        # h_cat_att = self.transformer_encoder(nodes.mailbox["h_child"])
-        h_cat_att = nodes.mailbox["h_child"]
+        h_cat_att = self.transformer_encoder(nodes.mailbox["h_child"])
         h_cat_att = h_cat_att.view(h_cat_att.size(0), -1)
         iou = self.W_iou(nodes.data["x"]) + self.U_iou(h_cat_att) + self.b_iou  # [batch, 3 * h_size]
         c = torch.sum(f.view(nodes.mailbox["c_child"].size()) * nodes.mailbox["c_child"], 1)
