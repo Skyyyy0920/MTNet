@@ -6,6 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 class TrajectoryTrainDataset(Dataset):
     def __init__(self, data_df, map_set):
         user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict = map_set
+        fuse_len = len(POI_id2idx_dict) + len(cat_id2idx_dict) + 32 * 32
         self.trajectories = {}
 
         data_df = data_df.groupby(['trajectory_id']).filter(lambda x: len(x) > 2)
@@ -23,8 +24,9 @@ class TrajectoryTrainDataset(Dataset):
                 _, next_pid, next_cid, _, _, _, _, _, _, next_tim, _, _, _, _, _, next_coo = trajectory.iloc[index + 1]
                 POI_idx, cat_idx = POI_id2idx_dict[pid], cat_id2idx_dict[cid]
                 next_POI_idx, next_cat_idx = POI_id2idx_dict[next_pid], cat_id2idx_dict[next_cid]
-                features = [user_idx, POI_idx, cat_idx, tim.hour, coo]
-                labels = [next_POI_idx, next_cat_idx, next_tim.hour, next_coo]
+                features = [user_idx, POI_idx, cat_idx, fuse_len + tim.hour, coo]
+                labels = [next_POI_idx, next_cat_idx - len(POI_id2idx_dict), fuse_len + next_tim.hour,
+                          next_coo - len(POI_id2idx_dict) - len(cat_id2idx_dict)]
                 checkin = {'features': features, 'labels': labels}
                 self.trajectories[traj_idx].append(checkin)
 
@@ -79,6 +81,7 @@ class TrajectoryValDataset(Dataset):
 class TrajectoryTestDataset(Dataset):
     def __init__(self, data_df, map_set):
         user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict = map_set
+        fuse_len = len(POI_id2idx_dict) + len(cat_id2idx_dict) + 32 * 32
         self.trajectories = {}
 
         data_df['user_id'] = data_df['user_id'].astype(str)
@@ -101,9 +104,10 @@ class TrajectoryTestDataset(Dataset):
                 _, next_pid, next_cid, _, _, _, _, _, _, next_tim, _, _, _, _, _, next_coo = trajectory.iloc[index + 1]
                 POI_idx, cat_idx = POI_id2idx_dict[pid], cat_id2idx_dict[cid]
                 next_POI_idx, next_cat_idx = POI_id2idx_dict[next_pid], cat_id2idx_dict[next_cid]
-                features = [user_idx, POI_idx, cat_idx, tim.hour, coo]
+                features = [user_idx, POI_idx, cat_idx, fuse_len + tim.hour, coo]
                 if index == len(trajectory) - 2:
-                    labels = [next_POI_idx, next_cat_idx, next_tim.hour, next_coo]
+                    labels = [next_POI_idx, next_cat_idx - len(POI_id2idx_dict), fuse_len + next_tim.hour,
+                              next_coo - len(POI_id2idx_dict) - len(cat_id2idx_dict)]
                 else:
                     labels = [-1, -1, -1, -1]
                 checkin = {'features': features, 'labels': labels}

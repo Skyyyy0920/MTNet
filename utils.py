@@ -246,5 +246,5 @@ def construct_heterogeneous(trajectory, nary, need_plot, tree_type):
     if need_plot:
         plot_tree(tree)  # optional
 
-    dgl_tree = dgl.from_networkx(tree, node_attrs=['u', 'x', 'y', 'mask', 'label'])
+    dgl_tree = dgl.from_networkx(tree, node_attrs=['u', 'x', 'y', 'mask'])
     return dgl_tree

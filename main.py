@@ -12,7 +12,7 @@ from config import *
 from dataset import *
 
 SSTBatch = collections.namedtuple(
-    "SSTBatch", ["graph", "features", "label", "mask"]
+    "SSTBatch", ["graph", "user", "features", "label", "mask"]
 )
 
 
@@ -124,9 +124,11 @@ if __name__ == '__main__':
     # POI id to index
     POI_list = list(set(train_df['POI_id'].tolist()))
     POI_id2idx_dict = dict(zip(POI_list, range(len(POI_list))))
+    fuse_len = len(POI_id2idx_dict)
     # Cat id to index
     cat_ids = list(set(train_df['POI_catid'].tolist()))
-    cat_id2idx_dict = dict(zip(cat_ids, range(len(cat_ids))))
+    cat_id2idx_dict = dict(zip(cat_ids, range(fuse_len, fuse_len + len(cat_ids))))
+    fuse_len = fuse_len + len(cat_id2idx_dict)
 
     num_users = len(user_id2idx_dict)
     num_POIs = len(POI_id2idx_dict)
@@ -143,12 +145,13 @@ if __name__ == '__main__':
     def gen_coo_ID(lon, lat):
         if lon <= min_lon or lon >= max_lon or lat <= min_lat or lat >= max_lat:
             return -1
-        return int((lon - min_lon) / column) + 1 + int((lat - min_lat) / row) * args.lon_parts
+        return int((lon - min_lon) / column) + 1 + int((lat - min_lat) / row) * args.lon_parts + fuse_len
 
 
     train_df['coo_label'] = train_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
     val_df['coo_label'] = val_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
     test_df['coo_label'] = test_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
+    fuse_len = fuse_len + args.lon_parts * args.lat_parts
 
     # Build dataset
     map_set = (user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict)
@@ -175,7 +178,7 @@ if __name__ == '__main__':
                               num_cats=num_cats, cat_embed_dim=args.cat_embed_dim,
                               time_embed_dim=args.time_embed_dim,
                               num_coos=n_clusters, coo_embed_dim=args.coo_embed_dim,
-                              nary=args.nary, device=args.device).to(device=args.device)
+                              nary=args.nary + 3, device=args.device).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)
@@ -211,18 +214,20 @@ if __name__ == '__main__':
         for b_idx, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc="Training"):
             in_tree_batcher, out_tree_batcher = [], []
             for trajectory in batch:
-                traj_in_tree = construct_dgl_tree(trajectory, args.nary, args.plot_tree, 'in')
+                traj_in_tree = construct_heterogeneous(trajectory, args.nary, args.plot_tree, 'in')
                 in_tree_batcher.append(traj_in_tree.to(args.device))
-                traj_out_tree = construct_dgl_tree(trajectory, args.nary, args.plot_tree, 'out')
+                traj_out_tree = construct_heterogeneous(trajectory, args.nary, args.plot_tree, 'out')
                 out_tree_batcher.append(traj_out_tree.to(args.device))
 
             in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
             in_trees = SSTBatch(graph=in_tree_batch,
+                                user=in_tree_batch.ndata["u"].to(args.device),
                                 features=in_tree_batch.ndata["x"].to(args.device),
                                 label=in_tree_batch.ndata["y"].to(args.device),
                                 mask=in_tree_batch.ndata["mask"].to(args.device))
             out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
             out_trees = SSTBatch(graph=out_tree_batch,
+                                 user=out_tree_batch.ndata["u"].to(args.device),
                                  features=out_tree_batch.ndata["x"].to(args.device),
                                  label=out_tree_batch.ndata["y"].to(args.device),
                                  mask=out_tree_batch.ndata["mask"].to(args.device))
@@ -277,18 +282,20 @@ if __name__ == '__main__':
             for batch in test_dataloader:
                 in_tree_batcher, out_tree_batcher = [], []
                 for trajectory in batch:
-                    traj_in_tree = construct_dgl_tree(trajectory, args.nary, args.plot_tree, 'in')
+                    traj_in_tree = construct_heterogeneous(trajectory, args.nary, args.plot_tree, 'in')
                     in_tree_batcher.append(traj_in_tree.to(args.device))
-                    traj_out_tree = construct_dgl_tree(trajectory, args.nary, args.plot_tree, 'out')
+                    traj_out_tree = construct_heterogeneous(trajectory, args.nary, args.plot_tree, 'out')
                     out_tree_batcher.append(traj_out_tree.to(args.device))
 
                 in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
                 in_trees = SSTBatch(graph=in_tree_batch,
+                                    user=in_tree_batch.ndata["u"].to(args.device),
                                     features=in_tree_batch.ndata["x"].to(args.device),
                                     label=in_tree_batch.ndata["y"].to(args.device),
                                     mask=in_tree_batch.ndata["mask"].to(args.device))
                 out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
                 out_trees = SSTBatch(graph=out_tree_batch,
+                                     user=out_tree_batch.ndata["u"].to(args.device),
                                      features=out_tree_batch.ndata["x"].to(args.device),
                                      label=out_tree_batch.ndata["y"].to(args.device),
                                      mask=out_tree_batch.ndata["mask"].to(args.device))
