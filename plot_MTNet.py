@@ -1,4 +1,3 @@
-import dgl
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -17,8 +16,8 @@ def plot_tree(g):
     nx.draw_networkx_labels(g, pos, labels=node_labels, font_color='blue')
     node_labels = nx.get_node_attributes(g, 'y')
     nx.draw_networkx_labels(g, pos, labels=node_labels, font_color='red')
-    # node_labels = nx.get_node_attributes(g, 'mask')
-    # nx.draw_networkx_labels(g, pos, labels=node_labels, font_color='green')
+    node_labels = nx.get_node_attributes(g, 'time')
+    nx.draw_networkx_labels(g, pos, labels=node_labels, font_color='green')
     plt.show()
 
 
@@ -88,24 +87,25 @@ def construct_dgl_tree(trajectory, nary, need_plot, tree_type):
 def add_children_heterogeneous(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
     node = trajectory[index]
     idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], y=node['labels'], mask=1, label=0)
+    tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
+                  y=node['labels'], mask=1, label=0)  # add parent node
 
     if index > 0 and flag_dict[index]:
         flag_dict[index] = 0  # already play as parent node
-        # for i in range(nary, 0, -1):
         for i in range(1, nary + 1, 1):
             if index - i >= 0:
                 add_children_heterogeneous(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
                 tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
             else:  # fictitious node
                 node_id = tree.number_of_nodes()
-                tree.add_node(node_id, u=node['features'][0], x=trajectory[0]['features'][1], y=[-1] * 4, mask=0,
-                              label=0)
+                tree.add_node(node_id, u=node['features'][0], x=trajectory[0]['features'][1], time=node['time'],
+                              y=[-1] * 4, mask=0, label=0)
                 tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
 
-        for i in range(1, 4):
+        for i in range(1, 3):
             node_id = tree.number_of_nodes()
-            tree.add_node(node_id, u=node['features'][0], x=node['features'][i + 1], y=node['labels'], mask=1, label=i)
+            tree.add_node(node_id, u=node['features'][0], x=node['features'][i + 1], time=node['time'],
+                          y=node['labels'], mask=1, label=i)
             tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
 
     return
@@ -115,18 +115,17 @@ def add_children_heterogeneous_out(tree, trajectory, index, idx2idx_dict, flag_d
     re_index = len(trajectory) - 1 - index
     max_index = re_index
     node = trajectory[re_index]
-    ori_node = trajectory[re_index]
     idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], y=node['labels'], mask=1, label=0)
+    tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
+                  y=node['labels'], mask=1, label=0)
 
     if index > 0 and flag_dict[index]:
         flag_dict[index] = 0  # already play as parent node
-        # for i in range(nary, 0, -1):
         for i in range(1, nary + 1, 1):
             if index - i < 0:  # fictitious node
                 node_id = tree.number_of_nodes()
-                tree.add_node(node_id, u=node['features'][0], x=trajectory[-1]['features'][1], y=[-1] * 4, mask=0,
-                              label=0)
+                tree.add_node(node_id, u=node['features'][0], x=trajectory[-1]['features'][1], time=node['time'],
+                              y=[-1] * 4, mask=0, label=0)
                 tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
                 max_index = len(trajectory) - 1
             else:
@@ -134,13 +133,14 @@ def add_children_heterogeneous_out(tree, trajectory, index, idx2idx_dict, flag_d
                 max_index = child_idx if max_index < child_idx else max_index
                 tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
 
-        for i in range(1, 4):
+        for i in range(1, 3):
             node_id = tree.number_of_nodes()
-            tree.add_node(node_id, u=node['features'][0], x=node['features'][i + 1], y=node['labels'], mask=1, label=i)
+            tree.add_node(node_id, u=node['features'][0], x=node['features'][i + 1], time=node['time'],
+                          y=node['labels'], mask=1, label=i)
             tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
 
     # change node label
-    tree.add_node(idx2idx_dict[index], u=node['features'][0], x=ori_node['features'][1],
+    tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
                   y=trajectory[max_index]['labels'], mask=1, label=0)
     return max_index
 
@@ -165,7 +165,7 @@ def construct_heterogeneous(trajectory, nary, need_plot, tree_type):
 if __name__ == "__main__":
     trajectory = []
     for i in range(4):
-        checkin = {'features': [f'{i}_0', f'{i}_1', f'{i}_2', f'{i}_3', f'{i}_4'], 'labels': f'  {i}'}
+        checkin = {'features': [f'{i}_0', f'{i}_1', f'{i}_2', f'{i}_3'], 'time': f'{i}', 'labels': f'  {i}'}
         trajectory.append(checkin)
 
     construct_dgl_tree(trajectory, 3, True, 'in')

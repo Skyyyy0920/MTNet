@@ -12,7 +12,7 @@ from config import *
 from dataset import *
 
 SSTBatch = collections.namedtuple(
-    "SSTBatch", ["graph", "user", "features", "label", "mask"]
+    "SSTBatch", ["graph", "user", "features", "time", "label", "mask"]
 )
 
 
@@ -178,7 +178,7 @@ if __name__ == '__main__':
                               num_cats=num_cats, cat_embed_dim=args.cat_embed_dim,
                               time_embed_dim=args.time_embed_dim,
                               num_coos=n_clusters, coo_embed_dim=args.coo_embed_dim,
-                              nary=args.nary + 3, device=args.device).to(device=args.device)
+                              nary=args.nary + 2, device=args.device).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)
@@ -223,12 +223,14 @@ if __name__ == '__main__':
             in_trees = SSTBatch(graph=in_tree_batch,
                                 user=in_tree_batch.ndata["u"].to(args.device),
                                 features=in_tree_batch.ndata["x"].to(args.device),
+                                time=in_tree_batch.ndata["time"].to(args.device),
                                 label=in_tree_batch.ndata["y"].to(args.device),
                                 mask=in_tree_batch.ndata["mask"].to(args.device))
             out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
             out_trees = SSTBatch(graph=out_tree_batch,
                                  user=out_tree_batch.ndata["u"].to(args.device),
                                  features=out_tree_batch.ndata["x"].to(args.device),
+                                 time=out_tree_batch.ndata["time"].to(args.device),
                                  label=out_tree_batch.ndata["y"].to(args.device),
                                  mask=out_tree_batch.ndata["mask"].to(args.device))
 
@@ -291,12 +293,14 @@ if __name__ == '__main__':
                 in_trees = SSTBatch(graph=in_tree_batch,
                                     user=in_tree_batch.ndata["u"].to(args.device),
                                     features=in_tree_batch.ndata["x"].to(args.device),
+                                    time=in_tree_batch.ndata["time"].to(args.device),
                                     label=in_tree_batch.ndata["y"].to(args.device),
                                     mask=in_tree_batch.ndata["mask"].to(args.device))
                 out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
                 out_trees = SSTBatch(graph=out_tree_batch,
                                      user=out_tree_batch.ndata["u"].to(args.device),
                                      features=out_tree_batch.ndata["x"].to(args.device),
+                                     time=out_tree_batch.ndata["time"].to(args.device),
                                      label=out_tree_batch.ndata["y"].to(args.device),
                                      mask=out_tree_batch.ndata["mask"].to(args.device))
 

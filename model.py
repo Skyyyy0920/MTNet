@@ -4,20 +4,30 @@ import torch
 import torch.nn as nn
 
 
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=500):
-        super(PositionalEncoding, self).__init__()
+# class PositionalEncoding(nn.Module):
+#     def __init__(self, d_model, max_len=500):
+#         super(PositionalEncoding, self).__init__()
+#
+#         pe = torch.zeros(max_len, d_model)
+#         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+#         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+#         pe[:, 0::2] = torch.sin(position * div_term)
+#         pe[:, 1::2] = torch.cos(position * div_term)
+#         pe = pe.unsqueeze(0).transpose(0, 1)
+#         self.register_buffer('pe', pe)
+#
+#     def forward(self, x):
+#         x = x + self.pe[:x.size(0), :]
+#         return x
 
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer('pe', pe)
+
+class PositionalEncoding(nn.Embedding):
+    def __init__(self, d_model, max_len=5000):
+        super().__init__(max_len, d_model)
 
     def forward(self, x):
-        x = x + self.pe[:x.size(0), :]
+        weight = self.weight.data.unsqueeze(1)
+        x = x + weight[:x.size(0), :]
         return x
 
 
@@ -80,6 +90,9 @@ class TreeLSTM(nn.Module):
         self.fuse_embedding = nn.Embedding(num_embeddings=self.fuse_len, embedding_dim=POI_embed_dim)
         self.user_embedding_o = nn.Embedding(num_embeddings=num_users, embedding_dim=user_embed_dim)
         self.fuse_embedding_o = nn.Embedding(num_embeddings=self.fuse_len, embedding_dim=POI_embed_dim)
+        # positional encoding
+        self.time_pos_encoder = nn.Embedding(num_embeddings=3000, embedding_dim=self.embedding_dim)
+        self.time_pos_encoder_o = nn.Embedding(num_embeddings=3000, embedding_dim=self.embedding_dim)
         # dropout
         self.embed_dropout = nn.Dropout(embed_dropout)
         self.model_dropout = nn.Dropout(model_dropout)
@@ -97,10 +110,14 @@ class TreeLSTM(nn.Module):
     def forward(self, in_trees, out_trees):
         user_embedding = self.user_embedding(in_trees.user.long() * in_trees.mask)
         fuse_embedding = self.fuse_embedding(in_trees.features.long() * in_trees.mask)
+        pe = self.time_pos_encoder(in_trees.time.long() * in_trees.mask)
         concat_embedding = torch.cat((user_embedding, fuse_embedding), dim=1)
+        concat_embedding = concat_embedding + pe
         user_embedding_o = self.user_embedding_o(out_trees.user.long() * out_trees.mask)
         fuse_embedding_o = self.fuse_embedding_o(out_trees.features.long() * out_trees.mask)
+        pe_o = self.time_pos_encoder_o(out_trees.time.long() * in_trees.mask)
         concat_embedding_o = torch.cat((user_embedding_o, fuse_embedding_o), dim=1)
+        concat_embedding_o = concat_embedding_o + pe_o
 
         g = in_trees.graph.to(self.device)
         n = g.num_nodes()

@@ -18,16 +18,19 @@ class TrajectoryTrainDataset(Dataset):
             user_idx = user_id2idx_dict[user_id]
             traj_idx = len(self.trajectories)
             self.trajectories[traj_idx] = []
+            start_date = trajectory.iloc[0]['local_time']
 
             for index in range(len(trajectory) - 1):
                 _, pid, cid, _, _, _, _, _, _, tim, _, _, _, _, _, coo = trajectory.iloc[index]
                 _, next_pid, next_cid, _, _, _, _, _, _, next_tim, _, _, _, _, _, next_coo = trajectory.iloc[index + 1]
                 POI_idx, cat_idx = POI_id2idx_dict[pid], cat_id2idx_dict[cid]
                 next_POI_idx, next_cat_idx = POI_id2idx_dict[next_pid], cat_id2idx_dict[next_cid]
-                features = [user_idx, POI_idx, cat_idx, fuse_len + tim.hour, coo]
+                features = [user_idx, POI_idx, cat_idx, coo]
                 labels = [next_POI_idx, next_cat_idx - len(POI_id2idx_dict), fuse_len + next_tim.hour,
                           next_coo - len(POI_id2idx_dict) - len(cat_id2idx_dict)]
-                checkin = {'features': features, 'labels': labels}
+                tim_info = tim - start_date
+                tim_info = int((tim_info.days * 24 * 60 + tim_info.seconds / 60) / 15)
+                checkin = {'features': features, 'time': tim_info, 'labels': labels}
                 self.trajectories[traj_idx].append(checkin)
 
         print(f"Train dataset length: ", len(self.trajectories))
@@ -98,19 +101,22 @@ class TrajectoryTestDataset(Dataset):
             user_idx = user_id2idx_dict[user_id]
             traj_idx = len(self.trajectories)
             self.trajectories[traj_idx] = []
+            start_date = trajectory.iloc[0]['local_time']
 
             for index in range(len(trajectory) - 1):
                 _, pid, cid, _, _, _, _, _, _, tim, _, _, _, _, _, coo = trajectory.iloc[index]
                 _, next_pid, next_cid, _, _, _, _, _, _, next_tim, _, _, _, _, _, next_coo = trajectory.iloc[index + 1]
                 POI_idx, cat_idx = POI_id2idx_dict[pid], cat_id2idx_dict[cid]
                 next_POI_idx, next_cat_idx = POI_id2idx_dict[next_pid], cat_id2idx_dict[next_cid]
-                features = [user_idx, POI_idx, cat_idx, fuse_len + tim.hour, coo]
+                features = [user_idx, POI_idx, cat_idx, coo]
                 if index == len(trajectory) - 2:
                     labels = [next_POI_idx, next_cat_idx - len(POI_id2idx_dict), fuse_len + next_tim.hour,
                               next_coo - len(POI_id2idx_dict) - len(cat_id2idx_dict)]
                 else:
                     labels = [-1, -1, -1, -1]
-                checkin = {'features': features, 'labels': labels}
+                tim_info = tim - start_date
+                tim_info = int((tim_info.days * 24 * 60 + tim_info.seconds / 60) / 15)
+                checkin = {'features': features, 'time': tim_info, 'labels': labels}
                 self.trajectories[traj_idx].append(checkin)
 
         print(f"Test dataset length: ", len(self.trajectories))
