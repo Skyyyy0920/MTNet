@@ -1,6 +1,34 @@
 import dgl
+import math
 import torch
 import torch.nn as nn
+
+
+# class PositionalEncoding(nn.Module):
+#     def __init__(self, d_model, max_len=500):
+#         super(PositionalEncoding, self).__init__()
+#
+#         pe = torch.zeros(max_len, d_model)
+#         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+#         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+#         pe[:, 0::2] = torch.sin(position * div_term)
+#         pe[:, 1::2] = torch.cos(position * div_term)
+#         pe = pe.unsqueeze(0).transpose(0, 1)
+#         self.register_buffer('pe', pe)
+#
+#     def forward(self, x):
+#         x = x + self.pe[:x.size(0), :]
+#         return x
+
+
+class PositionalEncoding(nn.Embedding):
+    def __init__(self, d_model, max_len=5000):
+        super().__init__(max_len, d_model)
+
+    def forward(self, x):
+        weight = self.weight.data.unsqueeze(1)
+        x = x + weight[:x.size(0), :]
+        return x
 
 
 class Cell(nn.Module):
@@ -56,17 +84,15 @@ class TreeLSTM(nn.Module):
         self.h_size = h_size
         self.nary = nary
         # embedding
-        self.embedding_dim = user_embed_dim + POI_embed_dim + cat_embed_dim + time_embed_dim + coo_embed_dim
+        self.embedding_dim = user_embed_dim + POI_embed_dim
+        self.fuse_len = num_POIs + num_cats + num_coos + 24
         self.user_embedding = nn.Embedding(num_embeddings=num_users, embedding_dim=user_embed_dim)
-        self.POI_embedding = nn.Embedding(num_embeddings=num_POIs, embedding_dim=POI_embed_dim)
-        self.cat_embedding = nn.Embedding(num_embeddings=num_cats, embedding_dim=cat_embed_dim)
-        self.time_embedding = nn.Embedding(num_embeddings=24, embedding_dim=time_embed_dim)
-        self.coo_embedding = nn.Embedding(num_embeddings=num_coos, embedding_dim=coo_embed_dim)
+        self.fuse_embedding = nn.Embedding(num_embeddings=self.fuse_len, embedding_dim=POI_embed_dim)
         self.user_embedding_o = nn.Embedding(num_embeddings=num_users, embedding_dim=user_embed_dim)
-        self.POI_embedding_o = nn.Embedding(num_embeddings=num_POIs, embedding_dim=POI_embed_dim)
-        self.cat_embedding_o = nn.Embedding(num_embeddings=num_cats, embedding_dim=cat_embed_dim)
-        self.time_embedding_o = nn.Embedding(num_embeddings=24, embedding_dim=time_embed_dim)
-        self.coo_embedding_o = nn.Embedding(num_embeddings=num_coos, embedding_dim=coo_embed_dim)
+        self.fuse_embedding_o = nn.Embedding(num_embeddings=self.fuse_len, embedding_dim=POI_embed_dim)
+        # positional encoding
+        self.time_pos_encoder = nn.Embedding(num_embeddings=600, embedding_dim=self.embedding_dim)
+        self.time_pos_encoder_o = nn.Embedding(num_embeddings=600, embedding_dim=self.embedding_dim)
         # dropout
         self.embed_dropout = nn.Dropout(embed_dropout)
         self.model_dropout = nn.Dropout(model_dropout)
@@ -82,23 +108,16 @@ class TreeLSTM(nn.Module):
         self.decoder_coo_o = nn.Linear(h_size, num_coos)
 
     def forward(self, in_trees, out_trees):
-        user_embedding = self.user_embedding(in_trees.features[:, 0].long() * in_trees.mask)
-        POI_embedding = self.POI_embedding(in_trees.features[:, 1].long() * in_trees.mask)
-        cat_embedding = self.cat_embedding(in_trees.features[:, 2].long() * in_trees.mask)
-        time_embedding = self.time_embedding(in_trees.features[:, 3].long() * in_trees.mask)
-        coo_embedding = self.coo_embedding(in_trees.features[:, 4].long() * in_trees.mask)
-        concat_embedding = torch.cat(
-            (user_embedding, POI_embedding, cat_embedding, time_embedding, coo_embedding),
-            dim=1)  # concat -> [batch_size, embedding_dim]
-
-        user_embedding_o = self.user_embedding_o(out_trees.features[:, 0].long() * out_trees.mask)
-        POI_embedding_o = self.POI_embedding_o(out_trees.features[:, 1].long() * out_trees.mask)
-        cat_embedding_o = self.cat_embedding_o(out_trees.features[:, 2].long() * out_trees.mask)
-        time_embedding_o = self.time_embedding_o(out_trees.features[:, 3].long() * out_trees.mask)
-        coo_embedding_o = self.coo_embedding_o(out_trees.features[:, 4].long() * out_trees.mask)
-        concat_embedding_o = torch.cat(
-            (user_embedding_o, POI_embedding_o, cat_embedding_o, time_embedding_o, coo_embedding_o),
-            dim=1)  # concat -> [batch_size, embedding_dim]
+        user_embedding = self.user_embedding(in_trees.user.long() * in_trees.mask)
+        fuse_embedding = self.fuse_embedding(in_trees.features.long() * in_trees.mask)
+        pe = self.time_pos_encoder(in_trees.time.long() * in_trees.mask)
+        concat_embedding = torch.cat((user_embedding, fuse_embedding), dim=1)
+        concat_embedding = concat_embedding + pe * 0.5
+        user_embedding_o = self.user_embedding_o(out_trees.user.long() * out_trees.mask)
+        fuse_embedding_o = self.fuse_embedding_o(out_trees.features.long() * out_trees.mask)
+        pe_o = self.time_pos_encoder_o(out_trees.time.long() * in_trees.mask)
+        concat_embedding_o = torch.cat((user_embedding_o, fuse_embedding_o), dim=1)
+        concat_embedding_o = concat_embedding_o + pe_o * 0.5
 
         g = in_trees.graph.to(self.device)
         n = g.num_nodes()
