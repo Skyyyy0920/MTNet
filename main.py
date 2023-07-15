@@ -12,7 +12,7 @@ from config import *
 from dataset import *
 
 SSTBatch = collections.namedtuple(
-    "SSTBatch", ["graph", "user", "features", "time", "label", "mask"]
+    "SSTBatch", ["graph", "user", "features", "time", "label", "mask", "type"]
 )
 
 
@@ -179,10 +179,14 @@ if __name__ == '__main__':
                               time_embed_dim=args.time_embed_dim,
                               num_coos=n_clusters, coo_embed_dim=args.coo_embed_dim,
                               nary=args.nary + 2, device=args.device).to(device=args.device)
+    KG_model = KnowledgeGraph(args.h_size, fuse_len, 128).to(device=args.device)
+    KG_model_o = KnowledgeGraph(args.h_size, fuse_len, 128).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)
     criterion_coo = nn.CrossEntropyLoss(ignore_index=-1)
+    criterion_KG = MarginLoss(margin=4.0).to(device=args.device)
+    criterion_KG_o = MarginLoss(margin=4.0).to(device=args.device)
     optimizer = torch.optim.Adam(params=list(TreeLSTM_model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_gamma)
 
@@ -208,6 +212,8 @@ if __name__ == '__main__':
         TreeLSTM_model.train()
         TreeLSTM_model.cell.train()
         TreeLSTM_model.cell_o.train()
+        KG_model.train()
+        KG_model_o.train()
 
         loss_list = []
 
@@ -225,17 +231,22 @@ if __name__ == '__main__':
                                 features=in_tree_batch.ndata["x"].to(args.device),
                                 time=in_tree_batch.ndata["time"].to(args.device),
                                 label=in_tree_batch.ndata["y"].to(args.device),
-                                mask=in_tree_batch.ndata["mask"].to(args.device))
+                                mask=in_tree_batch.ndata["mask"].to(args.device),
+                                type=in_tree_batch.ndata["type"].to(args.device))
             out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
             out_trees = SSTBatch(graph=out_tree_batch,
                                  user=out_tree_batch.ndata["u"].to(args.device),
                                  features=out_tree_batch.ndata["x"].to(args.device),
                                  time=out_tree_batch.ndata["time"].to(args.device),
                                  label=out_tree_batch.ndata["y"].to(args.device),
-                                 mask=out_tree_batch.ndata["mask"].to(args.device))
+                                 mask=out_tree_batch.ndata["mask"].to(args.device),
+                                 type=out_tree_batch.ndata["type"].to(args.device))
 
-            y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
+            y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, \
+            h, h_pre, rel, h_o, h_pre_o, rel_o = \
                 TreeLSTM_model(in_trees, out_trees)
+            score = KG_model(h, h_pre, rel)
+            score_o = KG_model_o(h_o, h_pre_o, rel_o)
 
             y_POI, y_cat, y_tim, y_coo = \
                 in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2], in_trees.label[:, 3]
@@ -245,7 +256,9 @@ if __name__ == '__main__':
             loss_POI = criterion_POI(y_pred_POI, y_POI.long()) + criterion_POI(y_pred_POI_o, y_POI_o.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long()) + criterion_cat(y_pred_cat_o, y_cat_o.long())
             loss_coo = criterion_coo(y_pred_coo, y_coo.long()) + criterion_coo(y_pred_coo_o, y_coo_o.long())
-            loss = loss_POI + loss_cat + loss_coo
+            loss_KG = criterion_KG(score)
+            loss_KG_o = criterion_KG_o(score_o)
+            loss = loss_POI + loss_cat + loss_coo + loss_KG + loss_KG_o
             loss_list.append(loss.item())
             loss.backward()
 
@@ -275,6 +288,8 @@ if __name__ == '__main__':
         TreeLSTM_model.eval()
         TreeLSTM_model.cell.eval()
         TreeLSTM_model.cell_o.eval()
+        KG_model.eval()
+        KG_model_o.eval()
 
         with torch.no_grad():
             y_pred_POI_list, y_label_POI_list = [], []
@@ -295,16 +310,19 @@ if __name__ == '__main__':
                                     features=in_tree_batch.ndata["x"].to(args.device),
                                     time=in_tree_batch.ndata["time"].to(args.device),
                                     label=in_tree_batch.ndata["y"].to(args.device),
-                                    mask=in_tree_batch.ndata["mask"].to(args.device))
+                                    mask=in_tree_batch.ndata["mask"].to(args.device),
+                                    type=in_tree_batch.ndata["type"].to(args.device))
                 out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
                 out_trees = SSTBatch(graph=out_tree_batch,
                                      user=out_tree_batch.ndata["u"].to(args.device),
                                      features=out_tree_batch.ndata["x"].to(args.device),
                                      time=out_tree_batch.ndata["time"].to(args.device),
                                      label=out_tree_batch.ndata["y"].to(args.device),
-                                     mask=out_tree_batch.ndata["mask"].to(args.device))
+                                     mask=out_tree_batch.ndata["mask"].to(args.device),
+                                     type=out_tree_batch.ndata["type"].to(args.device))
 
-                y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
+                y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, \
+                h, h_pre, rel, h_o, h_pre_o, rel_o = \
                     TreeLSTM_model(in_trees, out_trees)
 
                 y_POI, y_cat, y_tim, y_coo = \
