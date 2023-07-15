@@ -1,0 +1,82 @@
+[2023-06-21 16:21:25 INFO]
+TreeLSTM(
+  (user_embedding): Embedding(1047, 128)
+  (POI_embedding): Embedding(4980, 128)
+  (cat_embedding): Embedding(318, 32)
+  (time_embedding): Embedding(24, 32)
+  (coo_embedding): Embedding(1024, 32)
+  (user_embedding_o): Embedding(1047, 128)
+  (POI_embedding_o): Embedding(4980, 128)
+  (cat_embedding_o): Embedding(318, 32)
+  (time_embedding_o): Embedding(24, 32)
+  (coo_embedding_o): Embedding(1024, 32)
+  (pos_encoder): PositionalEncoding()
+  (pos_encoder_o): PositionalEncoding()
+  (embed_dropout): Dropout(p=0.2, inplace=False)
+  (model_dropout): Dropout(p=0.4, inplace=False)
+  (cell): Cell(
+    (W_f): Linear(in_features=352, out_features=512, bias=False)
+    (U_f): Linear(in_features=1536, out_features=1536, bias=False)
+    (W_iou): Linear(in_features=352, out_features=1536, bias=False)
+    (U_iou): Linear(in_features=1536, out_features=1536, bias=False)
+    (transformer_encoder): TransformerEncoder(
+      (layers): ModuleList(
+        (0-1): 2 x TransformerEncoderLayer(
+          (self_attn): MultiheadAttention(
+            (out_proj): NonDynamicallyQuantizableLinear(in_features=512, out_features=512, bias=True)
+          )
+          (linear1): Linear(in_features=512, out_features=1024, bias=True)
+          (dropout): Dropout(p=0.4, inplace=False)
+          (linear2): Linear(in_features=1024, out_features=512, bias=True)
+          (norm1): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
+          (norm2): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
+          (dropout1): Dropout(p=0.4, inplace=False)
+          (dropout2): Dropout(p=0.4, inplace=False)
+        )
+      )
+    )
+  )
+  (cell_o): Cell(
+    (W_f): Linear(in_features=352, out_features=512, bias=False)
+    (U_f): Linear(in_features=1536, out_features=1536, bias=False)
+    (W_iou): Linear(in_features=352, out_features=1536, bias=False)
+    (U_iou): Linear(in_features=1536, out_features=1536, bias=False)
+    (transformer_encoder): TransformerEncoder(
+      (layers): ModuleList(
+        (0-1): 2 x TransformerEncoderLayer(
+          (self_attn): MultiheadAttention(
+            (out_proj): NonDynamicallyQuantizableLinear(in_features=512, out_features=512, bias=True)
+          )
+          (linear1): Linear(in_features=512, out_features=1024, bias=True)
+          (dropout): Dropout(p=0.4, inplace=False)
+          (linear2): Linear(in_features=1024, out_features=512, bias=True)
+          (norm1): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
+          (norm2): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
+          (dropout1): Dropout(p=0.4, inplace=False)
+          (dropout2): Dropout(p=0.4, inplace=False)
+        )
+      )
+    )
+  )
+  (decoder_POI): Linear(in_features=512, out_features=4980, bias=True)
+  (decoder_cat): Linear(in_features=512, out_features=318, bias=True)
+  (decoder_coo): Linear(in_features=512, out_features=1024, bias=True)
+  (decoder_POI_o): Linear(in_features=512, out_features=4980, bias=True)
+  (decoder_cat_o): Linear(in_features=512, out_features=318, bias=True)
+  (decoder_coo_o): Linear(in_features=512, out_features=1024, bias=True)
+)
+[2023-06-21 16:21:25 INFO]
+Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    capturable: False
+    differentiable: False
+    eps: 1e-08
+    foreach: None
+    fused: None
+    initial_lr: 0.001
+    lr: 0.001
+    maximize: False
+    weight_decay: 0.0001
+)

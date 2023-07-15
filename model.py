@@ -53,11 +53,10 @@ class Cell(nn.Module):
         i, o, u = torch.sigmoid(i), torch.sigmoid(o), torch.tanh(u)
         c = i * u + nodes.data["c"]  # [batch, h_size]
         h = o * torch.tanh(c)
-        return {"h": h, "c": c, "rel": nodes.data["rel"], "h_pre": nodes.data["h_pre"]}
+        return {"h": h, "c": c}
 
     def message_func(self, edges):
-        return {"h_child": edges.src["h"], "c_child": edges.src["c"],
-                "type": edges.src["type"], "x_ori": edges.src["x_ori"]}
+        return {"h_child": edges.src["h"], "c_child": edges.src["c"]}
 
     def reduce_func(self, nodes):
         Wx = torch.cat([self.W_f(nodes.data["x"]) for _ in range(self.nary)], dim=1)
@@ -68,12 +67,7 @@ class Cell(nn.Module):
         f = torch.sigmoid(Wx + h_children + b_f)
         iou = self.W_iou(nodes.data["x"]) + self.U_iou(h_children) + self.b_iou  # [batch, 3 * h_size]
         c = torch.sum(f.view(nodes.mailbox["c_child"].size()) * nodes.mailbox["c_child"], 1)
-
-        relation = nodes.mailbox["x_ori"][:, 1:]
-        h_pre = nodes.mailbox["h_child"][:, 0, :].squeeze(1)
-        # 这里取第0列是因为POI在子节点中处于第0列的位置, 详情可以看nodes.mailbox["type"]
-
-        return {"c": c.view(c.size(0), -1), "iou": iou, "rel": relation, "h_pre": h_pre}
+        return {"c": c.view(c.size(0), -1), "iou": iou}
 
 
 class TreeLSTM(nn.Module):
@@ -135,9 +129,6 @@ class TreeLSTM(nn.Module):
         g.ndata["c"] = torch.zeros((n, self.h_size)).to(self.device)
         g.ndata["h_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
         g.ndata["c_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
-        g.ndata["x_ori"] = in_trees.features.long() * in_trees.mask
-        g.ndata["rel"] = torch.zeros((n, 2), dtype=torch.int64).to(self.device)
-        g.ndata["h_pre"] = torch.zeros((n, self.h_size)).to(self.device)
 
         dgl.prop_nodes_topo(graph=g,
                             message_func=self.cell.message_func,
@@ -145,8 +136,6 @@ class TreeLSTM(nn.Module):
                             apply_node_func=self.cell.apply_node_func)
 
         h = self.model_dropout(g.ndata.pop("h"))  # [batch_size, h_size]
-        h_pre = g.ndata.pop("h_pre")
-        rel = g.ndata.pop("rel")
 
         y_pred_POI = self.decoder_POI(h)
         y_pred_cat = self.decoder_cat(h)
@@ -161,9 +150,6 @@ class TreeLSTM(nn.Module):
         g_o.ndata["c"] = torch.zeros((n, self.h_size)).to(self.device)
         g_o.ndata["h_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
         g_o.ndata["c_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
-        g_o.ndata["x_ori"] = out_trees.features.long() * out_trees.mask
-        g_o.ndata["rel"] = torch.zeros((n, 2), dtype=torch.int64).to(self.device)
-        g_o.ndata["h_pre"] = torch.zeros((n, self.h_size)).to(self.device)
 
         dgl.prop_nodes_topo(graph=g_o,
                             message_func=self.cell_o.message_func,
@@ -171,15 +157,12 @@ class TreeLSTM(nn.Module):
                             apply_node_func=self.cell_o.apply_node_func)
 
         h_o = self.model_dropout(g_o.ndata.pop("h"))  # [batch_size, h_size]
-        h_pre_o = g_o.ndata.pop("h_pre")
-        rel_o = g_o.ndata.pop("rel")
 
         y_pred_POI_o = self.decoder_POI_o(h_o)
         y_pred_cat_o = self.decoder_cat_o(h_o)
         y_pred_coo_o = self.decoder_coo_o(h_o)
 
-        return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, \
-               h, h_pre, rel, h_o, h_pre_o, rel_o
+        return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o
 
     def predict(self, in_trees, out_trees):
         y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = self.forward(in_trees, out_trees)
@@ -241,138 +224,3 @@ class MarginLoss(nn.Module):
         # score = self.forward(p_score, n_score)
         score = self.forward(p_score)
         return score.cpu().data.numpy()
-
-
-class GeoPrediction(nn.Module):
-    def __init__(self):
-        super(GeoPrediction, self).__init__()
-        self.cia = CheckInActivity(config.train_checkins_filename, config.test_filename, config.tune_filename)
-        self.a = Variable(torch.zeros(1).type(torch.FloatTensor), requires_grad=True).to(device)
-        self.W1 = Variable(torch.zeros(config.dim_m, config.dim_m).type(torch.FloatTensor), requires_grad=True).to(
-            device)
-        self.W2 = Variable(torch.zeros(config.dim_m, config.dim_m).type(torch.FloatTensor), requires_grad=True).to(
-            device)
-        self.P = Variable(torch.zeros(config.history_num, config.dim_m).type(torch.FloatTensor), requires_grad=True).to(
-            device)
-        self.bias = Variable(torch.zeros(config.history_num, config.dim_m).type(torch.FloatTensor),
-                             requires_grad=True).to(device)
-        # self.beta = Variable(torch.zeros(1).type(torch.FloatTensor), requires_grad=True).to(device)
-
-        self.a = nn.init.normal_(self.a)
-        self.W1 = nn.init.xavier_uniform_(self.W1)
-        self.W2 = nn.init.xavier_uniform_(self.W2)
-        self.P = nn.init.normal_(self.P)
-        self.bias = nn.init.xavier_uniform_(self.bias)
-
-        self.user_embeddings = nn.Embedding(self.cia.u_tot, config.dim_d, max_norm=1)
-        self.location_embeddings = nn.Embedding(20 + config.time_slot, config.dim_m, max_norm=1)
-        self.venue_embeddings = nn.Embedding(self.cia.v_tot, config.dim_d, max_norm=1)
-
-        nn.init.normal_(self.user_embeddings.weight.data)
-        nn.init.normal_(self.location_embeddings.weight.data)
-        nn.init.normal_(self.venue_embeddings.weight.data)
-
-        self.location_matrix = nn.Embedding(20 + config.time_slot, config.dim_m * config.dim_d, max_norm=1)
-        if not config.rand_init:
-            identity = torch.zeros(config.dim_m, config.dim_d)
-            for i in range(min(config.dim_d, config.dim_m)):
-                identity[i][i] = 1
-            identity = identity.view(config.dim_m * config.dim_d)
-            for i in range(20 + config.time_slot):
-                self.location_matrix.weight.data[i] = identity
-        else:
-            self.location_matrix = nn.init.xavier_uniform_(self.location_matrix.weight.data)
-
-        if config.margin is not None:
-            self.margin = nn.Parameter(torch.Tensor([config.margin]))
-            self.margin.requires_grad = False
-            self.margin_flag = True
-        else:
-            self.margin_flag = False
-
-    @staticmethod
-    def _calc(u, l, v):
-        u = F.normalize(u, 2, -1)
-        l = F.normalize(l, 2, -1)
-        v = F.normalize(v, 2, -1)
-
-        score = u + l - v
-        score = torch.norm(score, config.p_norm, -1).flatten()
-        return score
-
-    @staticmethod
-    def _transfer(emb, l_transfer):
-        l_transfer = l_transfer.view(-1, config.dim_d, config.dim_m)
-        if emb.shape[0] != l_transfer.shape[0]:
-            emb = emb.view(-1, l_transfer.shape[0], config.dim_d).permute(1, 0, 2)
-            emb = emb.matmul(emb, l_transfer).permute(1, 0, 2)
-        else:
-            emb = emb.view(-1, 1, config.dim_d)
-            emb = torch.matmul(emb, l_transfer)
-        return emb.view(-1, config.dim_m)
-
-    def forward(self, data):
-        batch_u = data['batch_u']
-        batch_v = data['batch_v']
-        batch_olc = data['batch_olc']
-        batch_cluster_olc = data['batch_cluster_olc']
-        batch_history = data['batch_history']
-
-        u = self.user_embeddings(batch_u)
-        v = self.venue_embeddings(batch_v)
-
-        # window
-        history_emb = self.venue_embeddings(batch_history)
-
-        # Attention network
-        h = torch.tanh(torch.matmul(history_emb, self.W1).to(device)
-                       + torch.matmul(self.P, self.W2).repeat(len(history_emb), 1, 1).to(device)
-                       + self.bias.repeat(len(history_emb), 1, 1)).to(device)
-        alpha = torch.softmax(h, dim=1).to(device)
-        l = alpha * history_emb
-        l = torch.sum(l, 1) + self.a
-
-        score = self._calc(u, l, v)
-        if self.margin_flag:
-            return self.margin - score
-        else:
-            return score
-
-    def predict(self, data):
-        score = self.forward_test(data)
-        if self.margin_flag:
-            score = self.margin - score
-            return score.cpu().data.numpy()
-        else:
-            return score.cpu().data.numpy()
-
-    def forward_test(self, data):
-        batch_u = data['batch_u']
-        batch_v = data['batch_v']
-        batch_olc = data['batch_olc']
-        batch_cluster_olc = data['batch_cluster_olc']
-        batch_history = data['batch_history']
-
-        u = self.user_embeddings(batch_u)
-        v = self.venue_embeddings(batch_v)
-
-        # window
-        history_emb = self.venue_embeddings(batch_history)
-
-        score_sum = Variable(torch.zeros(int(history_emb.size()[0])).type(torch.FloatTensor), requires_grad=True).to(
-            device)
-        for i in range(int(history_emb[0].size()[0])):
-            if int(history_emb[0].size()[0]) - i >= config.history_num:
-                history_sub = history_emb[:, i:config.history_num + i, :]
-                h = torch.tanh(torch.matmul(history_sub, self.W1).to(device)
-                               + torch.matmul(self.P, self.W2).repeat(len(history_sub), 1, 1).to(device)
-                               + self.bias.repeat(len(history_sub), 1, 1)).to(device)
-                alpha = torch.softmax(h, dim=1).to(device)
-                l = alpha * history_sub
-                l = torch.sum(l, 1) + self.a
-                score = self._calc(u, l, v)
-                if self.margin_flag:
-                    score = self.margin - score
-                score_sum += score
-
-        return score_sum
