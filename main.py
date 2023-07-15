@@ -237,7 +237,7 @@ if __name__ == '__main__':
                                  label=out_tree_batch.ndata["y"].to(args.device),
                                  mask=out_tree_batch.ndata["mask"].to(args.device))
 
-            y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
+            y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o = \
                 TreeLSTM_model(in_trees, out_trees)
 
             y_POI, y_cat, y_tim, y_coo = \
@@ -245,10 +245,13 @@ if __name__ == '__main__':
             y_POI_o, y_cat_o, y_tim_o, y_coo_o = \
                 out_trees.label[:, 0], out_trees.label[:, 1], out_trees.label[:, 2], out_trees.label[:, 3]
 
+            score = KG_model(h, y_POI, (y_cat, y_coo))
+            loss_KG = criterion_KG(score)
+
             loss_POI = criterion_POI(y_pred_POI, y_POI.long()) + criterion_POI(y_pred_POI_o, y_POI_o.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long()) + criterion_cat(y_pred_cat_o, y_cat_o.long())
             loss_coo = criterion_coo(y_pred_coo, y_coo.long()) + criterion_coo(y_pred_coo_o, y_coo_o.long())
-            loss = loss_POI + loss_cat + loss_coo
+            loss = loss_POI + loss_cat + loss_coo + loss_KG
             loss_list.append(loss.item())
             loss.backward()
 
@@ -309,7 +312,7 @@ if __name__ == '__main__':
                                      label=out_tree_batch.ndata["y"].to(args.device),
                                      mask=out_tree_batch.ndata["mask"].to(args.device))
 
-                y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
+                y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o = \
                     TreeLSTM_model(in_trees, out_trees)
 
                 y_POI, y_cat, y_tim, y_coo = \

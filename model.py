@@ -162,29 +162,23 @@ class TreeLSTM(nn.Module):
         y_pred_cat_o = self.decoder_cat_o(h_o)
         y_pred_coo_o = self.decoder_coo_o(h_o)
 
-        return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o
-
-    def predict(self, in_trees, out_trees):
-        y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = self.forward(in_trees, out_trees)
-        return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o
+        return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o
 
 
 class KnowledgeGraph(nn.Module):
-    def __init__(self, h_size, rel_num, rel_dim):
+    def __init__(self, h_size, rel_num, dim):
         super(KnowledgeGraph, self).__init__()
-        # self.head_embedding = nn.Embedding(1, 1)
-        # self.tail_embedding = nn.Embedding(1, 1)
-        self.head_embedding = nn.Linear(h_size, rel_dim)
-        self.tail_embedding = nn.Linear(h_size, rel_dim)
-        self.relation_embedding = nn.Embedding(rel_num, rel_dim)
-        self.W_h = nn.Linear(rel_dim, rel_dim)
-        self.W_t = nn.Linear(rel_dim, rel_dim)
-        self.W_r = nn.Linear(rel_dim * 2, rel_dim)
+        self.head_embedding = nn.Linear(h_size, dim)
+        self.tail_embedding = nn.Embedding(rel_num, dim)
+        self.relation_embedding = nn.Embedding(rel_num, dim)
+        self.W_h = nn.Linear(dim, dim)
+        self.W_t = nn.Linear(dim, dim)
+        self.W_r = nn.Linear(dim * 2, dim)
 
     def forward(self, head, tail, relation):
         head = F.normalize(self.head_embedding(head), 2, -1)
         tail = F.normalize(self.tail_embedding(tail), 2, -1)
-        cat, coo = relation[:, 0], relation[:, 1]
+        cat, coo = relation
         cat = F.normalize(self.relation_embedding(cat), 2, -1)
         coo = F.normalize(self.relation_embedding(coo), 2, -1)
 
@@ -195,6 +189,12 @@ class KnowledgeGraph(nn.Module):
 
         score = head + relation - tail
         return score
+
+    def predict(self, head):
+        tail = None
+        relation = None
+        recommendation_list = self.forward(head, tail, relation)  # [batch_size, num_POI]
+        return recommendation_list
 
 
 class MarginLoss(nn.Module):

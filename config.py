@@ -79,7 +79,7 @@ def get_args():
                         help='Batch size')  # 1024
     parser.add_argument('--accumulation_steps',
                         type=int,
-                        default=32,
+                        default=8,
                         help='Gradient accumulation to solve the GPU memory problem')
     parser.add_argument('--epochs',
                         type=int,
