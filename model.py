@@ -164,23 +164,31 @@ class TreeLSTM(nn.Module):
 
         return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o
 
+    def get_embedding(self, y_POI, y_cat, y_coo):
+        return self.fuse_embedding(y_POI), self.fuse_embedding(y_cat), self.fuse_embedding(y_coo)
+
 
 class KnowledgeGraph(nn.Module):
-    def __init__(self, h_size, rel_num, dim):
+    def __init__(self, h_size, rel_num, dim, num_POIs):
         super(KnowledgeGraph, self).__init__()
         self.head_embedding = nn.Linear(h_size, dim)
-        self.tail_embedding = nn.Embedding(rel_num, dim)
-        self.relation_embedding = nn.Embedding(rel_num, dim)
+        # self.tail_embedding = nn.Embedding(rel_num, dim)
+        # self.relation_embedding = nn.Embedding(rel_num, dim)
         self.W_h = nn.Linear(dim, dim)
         self.W_t = nn.Linear(dim, dim)
         self.W_r = nn.Linear(dim * 2, dim)
+        self.num_POIs = num_POIs
 
     def forward(self, head, tail, relation):
         head = F.normalize(self.head_embedding(head), 2, -1)
-        tail = F.normalize(self.tail_embedding(tail), 2, -1)
+        # tail = F.normalize(self.tail_embedding(tail), 2, -1)
+        # cat, coo = relation
+        # cat = F.normalize(self.relation_embedding(cat), 2, -1)
+        # coo = F.normalize(self.relation_embedding(coo), 2, -1)
+        tail = F.normalize(tail, 2, -1)
         cat, coo = relation
-        cat = F.normalize(self.relation_embedding(cat), 2, -1)
-        coo = F.normalize(self.relation_embedding(coo), 2, -1)
+        cat = F.normalize(cat, 2, -1)
+        coo = F.normalize(coo, 2, -1)
 
         h_v = torch.tanh(self.W_h(cat))
         h_t = torch.tanh(self.W_t(coo))
@@ -188,12 +196,19 @@ class KnowledgeGraph(nn.Module):
         relation = z * h_v + (1 - z) * h_t
 
         score = head + relation - tail
+        score = torch.norm(score, 1, -1).flatten()
         return score
 
-    def predict(self, head):
-        tail = None
-        relation = None
-        recommendation_list = self.forward(head, tail, relation)  # [batch_size, num_POI]
+    def predict(self, head, tail, relation):
+        """
+        tail and relation are fixed, their shapes are [num_POI, embedding_dim]
+        """
+        recommendation_list = []
+        for he in head:
+            he = he.expand(tail.size(0), -1)
+            score_matrix = self.forward(he, tail, relation)  # [1, num_POI]
+            recommendation_list.append(score_matrix.unsqueeze(0))
+        recommendation_list = torch.cat(recommendation_list, dim=0)
         return recommendation_list
 
 
@@ -211,16 +226,9 @@ class MarginLoss(nn.Module):
     def get_weights(self, n_score):
         return F.softmax(-n_score * self.adv_temperature, dim=-1).detach()
 
-    # def forward(self, p_score, n_score):
-    #     if self.adv_flag:
-    #         return (self.get_weights(n_score) * torch.max(p_score - n_score, -self.margin)).sum(
-    #             dim=-1).mean() + self.margin
-    #     else:
-    #         return (torch.max(p_score - n_score, -self.margin)).mean() + self.margin
-    def forward(self, p_score):
-        return (torch.max(p_score, -self.margin)).mean() + self.margin
-
-    def predict(self, p_score, n_score):
-        # score = self.forward(p_score, n_score)
-        score = self.forward(p_score)
-        return score.cpu().data.numpy()
+    def forward(self, p_score, n_score):
+        if self.adv_flag:
+            return (self.get_weights(n_score) * torch.max(p_score - n_score, -self.margin)).sum(
+                dim=-1).mean() + self.margin
+        else:
+            return (torch.max(p_score - n_score, -self.margin)).mean() + self.margin

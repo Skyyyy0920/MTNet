@@ -153,6 +153,25 @@ if __name__ == '__main__':
     test_df['coo_label'] = test_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
     fuse_len = fuse_len + args.lon_parts * args.lat_parts
 
+    POI2user_dict = train_df.groupby('POI_id')['user_id'].apply(set).to_dict()
+    POI2cat_dict = train_df.groupby('POI_id')['POI_catid'].apply(set).to_dict()
+    POI2coo_dict = train_df.groupby('POI_id')['coo_label'].apply(set).to_dict()
+    POI_id2user_id_dict, POI_id2cat_id_dict, POI_id2coo_id_dict = {}, {}, {}
+    for key in POI2user_dict.keys():
+        POI_id2user_id_dict[POI_id2idx_dict[key]] = user_id2idx_dict[str(list(POI2user_dict[key])[0])]
+    for key in POI2cat_dict.keys():
+        POI_id2cat_id_dict[POI_id2idx_dict[key]] = cat_id2idx_dict[list(POI2cat_dict[key])[0]]
+    for key in POI2coo_dict.keys():
+        POI_id2coo_id_dict[POI_id2idx_dict[key]] = list(POI2coo_dict[key])[0]
+
+    candidate_tail, candidate_cat, candidate_coo = [], [], []
+    for i in range(num_POIs):
+        candidate_tail.append(i)
+        candidate_cat.append(POI_id2cat_id_dict[i])
+        candidate_coo.append(POI_id2coo_id_dict[i])
+    candidate_tail, candidate_cat, candidate_coo = torch.tensor(candidate_tail).to(args.device), torch.tensor(
+        candidate_cat).to(args.device), torch.tensor(candidate_coo).to(args.device)
+
     # Build dataset
     map_set = (user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict)
     train_dataset = TrajectoryTrainDataset(train_df, map_set)
@@ -179,7 +198,7 @@ if __name__ == '__main__':
                               time_embed_dim=args.time_embed_dim,
                               num_coos=n_clusters, coo_embed_dim=args.coo_embed_dim,
                               nary=args.nary + 2, device=args.device).to(device=args.device)
-    KG_model = KnowledgeGraph(args.h_size, fuse_len, 128).to(device=args.device)
+    KG_model = KnowledgeGraph(args.h_size, fuse_len, args.POI_embed_dim, num_POIs).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)
@@ -245,8 +264,12 @@ if __name__ == '__main__':
             y_POI_o, y_cat_o, y_tim_o, y_coo_o = \
                 out_trees.label[:, 0], out_trees.label[:, 1], out_trees.label[:, 2], out_trees.label[:, 3]
 
-            score = KG_model(h, y_POI, (y_cat, y_coo))
-            loss_KG = criterion_KG(score)
+            y_POI_emb, y_cat_emb, y_coo_emb = TreeLSTM_model.get_embedding(y_POI, y_cat, y_coo)
+            pos_score = KG_model(h, y_POI_emb, (y_cat_emb, y_coo_emb))
+            shuffled_indices = torch.randperm(len(y_POI_emb))
+            neg_score = KG_model(h, y_POI_emb[shuffled_indices],
+                                 (y_cat_emb[shuffled_indices], y_coo_emb[shuffled_indices]))
+            loss_KG = criterion_KG(pos_score, neg_score)
 
             loss_POI = criterion_POI(y_pred_POI, y_POI.long()) + criterion_POI(y_pred_POI_o, y_POI_o.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long()) + criterion_cat(y_pred_cat_o, y_cat_o.long())
@@ -314,11 +337,14 @@ if __name__ == '__main__':
 
                 y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o = \
                     TreeLSTM_model(in_trees, out_trees)
+                y_POI_emb, y_cat_emb, y_coo_emb = TreeLSTM_model.get_embedding(candidate_tail, candidate_cat,
+                                                                               candidate_coo)
+                KG_recommendation_list = KG_model.predict(h, y_POI_emb, (y_cat_emb, y_coo_emb))
 
                 y_POI, y_cat, y_tim, y_coo = \
                     in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2], in_trees.label[:, 3]
 
-                y_pred_POI_all = y_pred_POI + y_pred_POI_o
+                y_pred_POI_all = y_pred_POI + y_pred_POI_o + KG_recommendation_list * 0.5
                 y_pred_cat_all = y_pred_cat + y_pred_cat_o
                 y_pred_coo_all = y_pred_coo + y_pred_coo_o
                 y_pred_POI_list.append(y_pred_POI_all.detach().cpu().numpy())

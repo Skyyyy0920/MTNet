@@ -28,7 +28,7 @@ class TrajectoryTrainDataset(Dataset):
                 features = [user_idx, POI_idx, cat_idx, coo]
                 labels = [next_POI_idx, next_cat_idx - len(POI_id2idx_dict), fuse_len + next_tim.hour,
                           next_coo - len(POI_id2idx_dict) - len(cat_id2idx_dict)]
-                tim_info = int((tim - start_date).days * 24)
+                tim_info = int((tim - start_date).days * 24 + (tim - start_date).seconds / 60 / 60)
                 checkin = {'features': features, 'time': tim_info, 'labels': labels}
                 self.trajectories[traj_idx].append(checkin)
 
@@ -113,7 +113,7 @@ class TrajectoryTestDataset(Dataset):
                               next_coo - len(POI_id2idx_dict) - len(cat_id2idx_dict)]
                 else:
                     labels = [-1, -1, -1, -1]
-                tim_info = int((tim - start_date).days * 24)
+                tim_info = int((tim - start_date).days * 24 + (tim - start_date).seconds / 60 / 60)
                 checkin = {'features': features, 'time': tim_info, 'labels': labels}
                 self.trajectories[traj_idx].append(checkin)
 
