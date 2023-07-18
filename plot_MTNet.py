@@ -164,11 +164,11 @@ def construct_heterogeneous(trajectory, nary, need_plot, tree_type):
 
 if __name__ == "__main__":
     trajectory = []
-    for i in range(4):
+    for i in range(6):
         checkin = {'features': [f'{i}_0', f'{i}_1', f'{i}_2', f'{i}_3'], 'time': f'{i}', 'labels': f'  {i}'}
         trajectory.append(checkin)
 
     construct_dgl_tree(trajectory, 3, True, 'in')
     construct_dgl_tree(trajectory, 3, True, 'out')
-    construct_heterogeneous(trajectory, 3, True, 'in')
-    construct_heterogeneous(trajectory, 3, True, 'out')
+    construct_heterogeneous(trajectory, 1, True, 'in')
+    construct_heterogeneous(trajectory, 1, True, 'out')

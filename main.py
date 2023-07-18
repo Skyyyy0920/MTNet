@@ -12,7 +12,7 @@ from config import *
 from dataset import *
 
 SSTBatch = collections.namedtuple(
-    "SSTBatch", ["graph", "user", "features", "time", "label", "mask", "layer_mask"]
+    "SSTBatch", ["graph", "user", "features", "time", "label", "mask"]
 )
 
 
@@ -69,7 +69,7 @@ if __name__ == '__main__':
     print('\n' + '=' * 36 + ' Prepare data ' + '=' * 36)
     # Load data
     train_df = pd.read_csv(f'dataset/{args.dataset}/{args.dataset}_train.csv')
-    val_df = pd.read_csv(f'dataset/{args.dataset}/{args.dataset}_val.csv')
+    # val_df = pd.read_csv(f'dataset/{args.dataset}/{args.dataset}_val.csv')
     test_df = pd.read_csv(f'dataset/{args.dataset}/{args.dataset}_test.csv')
 
     # with open('dataset/NYC/NYC_train.csv', 'r') as f:
@@ -115,16 +115,17 @@ if __name__ == '__main__':
 
     if args.dataset == 'Gowalla-CA':
         train_df = process_for_GowallaCA(train_df)
-        val_df = process_for_GowallaCA(val_df)
+        # val_df = process_for_GowallaCA(val_df)
         test_df = process_for_GowallaCA(test_df)
 
-    # User id to index
-    uid_list = [str(uid) for uid in list(set(train_df['user_id'].to_list()))]
-    user_id2idx_dict = dict(zip(uid_list, range(len(uid_list))))
     # POI id to index
     POI_list = list(set(train_df['POI_id'].tolist()))
     POI_id2idx_dict = dict(zip(POI_list, range(len(POI_list))))
     fuse_len = len(POI_id2idx_dict)
+    # User id to index
+    uid_list = [str(uid) for uid in list(set(train_df['user_id'].to_list()))]
+    user_id2idx_dict = dict(zip(uid_list, range(len(uid_list))))
+    fuse_len = fuse_len + len(user_id2idx_dict)
     # Cat id to index
     cat_ids = list(set(train_df['POI_catid'].tolist()))
     cat_id2idx_dict = dict(zip(cat_ids, range(fuse_len, fuse_len + len(cat_ids))))
@@ -149,20 +150,39 @@ if __name__ == '__main__':
 
 
     train_df['coo_label'] = train_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
-    val_df['coo_label'] = val_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
+    # val_df['coo_label'] = val_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
     test_df['coo_label'] = test_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
     fuse_len = fuse_len + args.lon_parts * args.lat_parts
+
+    POI2user_dict = train_df.groupby('POI_id')['user_id'].apply(set).to_dict()
+    POI2cat_dict = train_df.groupby('POI_id')['POI_catid'].apply(set).to_dict()
+    POI2coo_dict = train_df.groupby('POI_id')['coo_label'].apply(set).to_dict()
+    POI_id2user_id_dict, POI_id2cat_id_dict, POI_id2coo_id_dict = {}, {}, {}
+    for key in POI2user_dict.keys():
+        POI_id2user_id_dict[POI_id2idx_dict[key]] = user_id2idx_dict[str(list(POI2user_dict[key])[0])]
+    for key in POI2cat_dict.keys():
+        POI_id2cat_id_dict[POI_id2idx_dict[key]] = cat_id2idx_dict[list(POI2cat_dict[key])[0]]
+    for key in POI2coo_dict.keys():
+        POI_id2coo_id_dict[POI_id2idx_dict[key]] = list(POI2coo_dict[key])[0]
+
+    candidate_tail, candidate_cat, candidate_coo = [], [], []
+    for i in range(num_POIs):
+        candidate_tail.append(i)
+        candidate_cat.append(POI_id2cat_id_dict[i])
+        candidate_coo.append(POI_id2coo_id_dict[i])
+    candidate_tail, candidate_cat, candidate_coo = torch.tensor(candidate_tail).to(args.device), torch.tensor(
+        candidate_cat).to(args.device), torch.tensor(candidate_coo).to(args.device)
 
     # Build dataset
     map_set = (user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict)
     train_dataset = TrajectoryTrainDataset(train_df, map_set)
-    val_dataset = TrajectoryValDataset(val_df, map_set)
+    # val_dataset = TrajectoryValDataset(val_df, map_set)
     test_dataset = TrajectoryTestDataset(test_df, map_set)
     train_batch_size = int(args.batch_size / args.accumulation_steps)
     train_dataloader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, drop_last=False,
                                   pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
-    val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False,
-                                pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
+    # val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False,
+    #                             pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False,
                                  pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
 
@@ -178,11 +198,13 @@ if __name__ == '__main__':
                               num_cats=num_cats, cat_embed_dim=args.cat_embed_dim,
                               time_embed_dim=args.time_embed_dim,
                               num_coos=n_clusters, coo_embed_dim=args.coo_embed_dim,
-                              nary=args.nary + 2, device=args.device).to(device=args.device)
+                              nary=args.nary + 3, device=args.device).to(device=args.device)
+    KG_model = KnowledgeGraph(args.h_size, fuse_len, args.POI_embed_dim, num_POIs).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)
     criterion_coo = nn.CrossEntropyLoss(ignore_index=-1)
+    criterion_KG = MarginLoss(margin=8.0).to(device=args.device)
     optimizer = torch.optim.Adam(params=list(TreeLSTM_model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_gamma)
 
@@ -208,6 +230,7 @@ if __name__ == '__main__':
         TreeLSTM_model.train()
         TreeLSTM_model.cell.train()
         TreeLSTM_model.cell_o.train()
+        KG_model.train()
 
         loss_list = []
 
@@ -225,18 +248,16 @@ if __name__ == '__main__':
                                 features=in_tree_batch.ndata["x"].to(args.device),
                                 time=in_tree_batch.ndata["time"].to(args.device),
                                 label=in_tree_batch.ndata["y"].to(args.device),
-                                mask=in_tree_batch.ndata["mask"].to(args.device),
-                                layer_mask=in_tree_batch.ndata["layer_mask"].to(args.device))
+                                mask=in_tree_batch.ndata["mask"].to(args.device))
             out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
             out_trees = SSTBatch(graph=out_tree_batch,
                                  user=out_tree_batch.ndata["u"].to(args.device),
                                  features=out_tree_batch.ndata["x"].to(args.device),
                                  time=out_tree_batch.ndata["time"].to(args.device),
                                  label=out_tree_batch.ndata["y"].to(args.device),
-                                 mask=out_tree_batch.ndata["mask"].to(args.device),
-                                 layer_mask=out_tree_batch.ndata["layer_mask"].to(args.device))
+                                 mask=out_tree_batch.ndata["mask"].to(args.device))
 
-            y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
+            y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o = \
                 TreeLSTM_model(in_trees, out_trees)
 
             y_POI, y_cat, y_tim, y_coo = \
@@ -244,10 +265,17 @@ if __name__ == '__main__':
             y_POI_o, y_cat_o, y_tim_o, y_coo_o = \
                 out_trees.label[:, 0], out_trees.label[:, 1], out_trees.label[:, 2], out_trees.label[:, 3]
 
+            y_POI_emb, y_cat_emb, y_coo_emb = TreeLSTM_model.get_embedding(y_POI, y_cat, y_coo)
+            pos_score = KG_model(h, y_POI_emb, (y_cat_emb, y_coo_emb))
+            shuffled_indices = torch.randperm(len(y_POI_emb))
+            neg_score = KG_model(h, y_POI_emb[shuffled_indices],
+                                 (y_cat_emb[shuffled_indices], y_coo_emb[shuffled_indices]))
+            loss_KG = criterion_KG(pos_score, neg_score)
+
             loss_POI = criterion_POI(y_pred_POI, y_POI.long()) + criterion_POI(y_pred_POI_o, y_POI_o.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long()) + criterion_cat(y_pred_cat_o, y_cat_o.long())
             loss_coo = criterion_coo(y_pred_coo, y_coo.long()) + criterion_coo(y_pred_coo_o, y_coo_o.long())
-            loss = loss_POI + loss_cat + loss_coo
+            loss = loss_POI + loss_cat + loss_coo + loss_KG * 5
             loss_list.append(loss.item())
             loss.backward()
 
@@ -271,15 +299,18 @@ if __name__ == '__main__':
             }
             torch.save(checkpoint, os.path.join(save_dir, f"checkpoint_{epoch + 1}.pth"))
 
+        # if (epoch + 1) % 10 == 0:
         # ==================================================================================================
         # 8. Testing
         # ==================================================================================================
         TreeLSTM_model.eval()
         TreeLSTM_model.cell.eval()
         TreeLSTM_model.cell_o.eval()
+        KG_model.eval()
 
         with torch.no_grad():
             y_pred_POI_list, y_label_POI_list = [], []
+            y_KG_POI_list = []
             y_pred_cat_list, y_label_cat_list = [], []
             y_pred_coo_list, y_label_coo_list = [], []
             # Start testing
@@ -297,27 +328,29 @@ if __name__ == '__main__':
                                     features=in_tree_batch.ndata["x"].to(args.device),
                                     time=in_tree_batch.ndata["time"].to(args.device),
                                     label=in_tree_batch.ndata["y"].to(args.device),
-                                    mask=in_tree_batch.ndata["mask"].to(args.device),
-                                    layer_mask=in_tree_batch.ndata["layer_mask"].to(args.device))
+                                    mask=in_tree_batch.ndata["mask"].to(args.device))
                 out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
                 out_trees = SSTBatch(graph=out_tree_batch,
                                      user=out_tree_batch.ndata["u"].to(args.device),
                                      features=out_tree_batch.ndata["x"].to(args.device),
                                      time=out_tree_batch.ndata["time"].to(args.device),
                                      label=out_tree_batch.ndata["y"].to(args.device),
-                                     mask=out_tree_batch.ndata["mask"].to(args.device),
-                                     layer_mask=out_tree_batch.ndata["layer_mask"].to(args.device))
+                                     mask=out_tree_batch.ndata["mask"].to(args.device))
 
-                y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
+                y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o = \
                     TreeLSTM_model(in_trees, out_trees)
+                y_POI_emb, y_cat_emb, y_coo_emb = TreeLSTM_model.get_embedding(candidate_tail, candidate_cat,
+                                                                               candidate_coo)
+                KG_recommendation_list = KG_model.predict(h, y_POI_emb, (y_cat_emb, y_coo_emb))
 
                 y_POI, y_cat, y_tim, y_coo = \
                     in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2], in_trees.label[:, 3]
 
-                y_pred_POI_all = y_pred_POI + y_pred_POI_o
+                y_pred_POI_all = y_pred_POI + y_pred_POI_o + KG_recommendation_list * -0.3
                 y_pred_cat_all = y_pred_cat + y_pred_cat_o
                 y_pred_coo_all = y_pred_coo + y_pred_coo_o
                 y_pred_POI_list.append(y_pred_POI_all.detach().cpu().numpy())
+                y_KG_POI_list.append(KG_recommendation_list.detach().cpu().numpy())
                 y_label_POI_list.append(y_POI.detach().cpu().numpy())
                 y_pred_cat_list.append(y_pred_cat_all.detach().cpu().numpy())
                 y_label_cat_list.append(y_cat.detach().cpu().numpy())
@@ -325,12 +358,14 @@ if __name__ == '__main__':
                 y_label_coo_list.append(y_coo.detach().cpu().numpy())
 
             y_label_POI_numpy, y_pred_POI_numpy = get_pred_label(y_label_POI_list, y_pred_POI_list)
+            y_KG_POI_numpy = np.concatenate(y_KG_POI_list, axis=0)
             y_label_cat_numpy, y_pred_cat_numpy = get_pred_label(y_label_cat_list, y_pred_cat_list)
             y_label_coo_numpy, y_pred_coo_numpy = get_pred_label(y_label_coo_list, y_pred_coo_list)
 
-            if (epoch + 1) % 600 == 0:
-                pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
-                pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
+            # if (epoch + 1) % 5 == 0 and epoch >= 30:
+            #     pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
+            #     pickle.dump(y_KG_POI_numpy, open(os.path.join(save_dir, f"KG_list_{epoch + 1}"), 'wb'))
+            #     pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
 
             # Logging
             logging.info(f"================================ Testing ================================")
