@@ -203,7 +203,7 @@ if __name__ == '__main__':
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)
     criterion_coo = nn.CrossEntropyLoss(ignore_index=-1)
-    criterion_KG = MarginLoss(margin=4.0).to(device=args.device)
+    criterion_KG = MarginLoss(margin=8.0).to(device=args.device)
     optimizer = torch.optim.Adam(params=list(TreeLSTM_model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_gamma)
 
@@ -274,7 +274,7 @@ if __name__ == '__main__':
             loss_POI = criterion_POI(y_pred_POI, y_POI.long()) + criterion_POI(y_pred_POI_o, y_POI_o.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long()) + criterion_cat(y_pred_cat_o, y_cat_o.long())
             loss_coo = criterion_coo(y_pred_coo, y_coo.long()) + criterion_coo(y_pred_coo_o, y_coo_o.long())
-            loss = loss_POI + loss_cat + loss_coo + loss_KG
+            loss = loss_POI + loss_cat + loss_coo + loss_KG * 5
             loss_list.append(loss.item())
             loss.backward()
 
@@ -309,6 +309,7 @@ if __name__ == '__main__':
 
         with torch.no_grad():
             y_pred_POI_list, y_label_POI_list = [], []
+            y_KG_POI_list = []
             y_pred_cat_list, y_label_cat_list = [], []
             y_pred_coo_list, y_label_coo_list = [], []
             # Start testing
@@ -344,10 +345,11 @@ if __name__ == '__main__':
                 y_POI, y_cat, y_tim, y_coo = \
                     in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2], in_trees.label[:, 3]
 
-                y_pred_POI_all = y_pred_POI + y_pred_POI_o + KG_recommendation_list * 0.5
+                y_pred_POI_all = y_pred_POI + y_pred_POI_o + KG_recommendation_list * -0.3
                 y_pred_cat_all = y_pred_cat + y_pred_cat_o
                 y_pred_coo_all = y_pred_coo + y_pred_coo_o
                 y_pred_POI_list.append(y_pred_POI_all.detach().cpu().numpy())
+                y_KG_POI_list.append(KG_recommendation_list.detach().cpu().numpy())
                 y_label_POI_list.append(y_POI.detach().cpu().numpy())
                 y_pred_cat_list.append(y_pred_cat_all.detach().cpu().numpy())
                 y_label_cat_list.append(y_cat.detach().cpu().numpy())
@@ -355,12 +357,14 @@ if __name__ == '__main__':
                 y_label_coo_list.append(y_coo.detach().cpu().numpy())
 
             y_label_POI_numpy, y_pred_POI_numpy = get_pred_label(y_label_POI_list, y_pred_POI_list)
+            y_KG_POI_numpy = np.concatenate(y_KG_POI_list, axis=0)
             y_label_cat_numpy, y_pred_cat_numpy = get_pred_label(y_label_cat_list, y_pred_cat_list)
             y_label_coo_numpy, y_pred_coo_numpy = get_pred_label(y_label_coo_list, y_pred_coo_list)
 
-            if (epoch + 1) % 600 == 0:
-                pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
-                pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
+            # if (epoch + 1) % 5 == 0 and epoch >= 30:
+            #     pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
+            #     pickle.dump(y_KG_POI_numpy, open(os.path.join(save_dir, f"KG_list_{epoch + 1}"), 'wb'))
+            #     pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
 
             # Logging
             logging.info(f"================================ Testing ================================")
