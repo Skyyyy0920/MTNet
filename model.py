@@ -75,9 +75,8 @@ class TreeLSTM(nn.Module):
                  h_size=512,
                  embed_dropout=0.2, model_dropout=0.4,
                  num_users=3000, user_embed_dim=128,
-                 num_POIs=5000, POI_embed_dim=128,
+                 num_POIs=5000, fuse_embed_dim=128,
                  num_cats=300, cat_embed_dim=32,
-                 time_embed_dim=32,
                  num_coos=1024, coo_embed_dim=64,
                  nary=3, device='cuda'):
         super(TreeLSTM, self).__init__()
@@ -85,12 +84,12 @@ class TreeLSTM(nn.Module):
         self.h_size = h_size
         self.nary = nary
         # embedding
-        self.embedding_dim = user_embed_dim + POI_embed_dim
+        self.embedding_dim = user_embed_dim + fuse_embed_dim
         self.fuse_len = num_POIs + num_cats + num_coos + 24
         self.user_embedding = nn.Embedding(num_embeddings=num_users, embedding_dim=user_embed_dim)
-        self.fuse_embedding = nn.Embedding(num_embeddings=self.fuse_len, embedding_dim=POI_embed_dim)
+        self.fuse_embedding = nn.Embedding(num_embeddings=self.fuse_len, embedding_dim=fuse_embed_dim)
         self.user_embedding_o = nn.Embedding(num_embeddings=num_users, embedding_dim=user_embed_dim)
-        self.fuse_embedding_o = nn.Embedding(num_embeddings=self.fuse_len, embedding_dim=POI_embed_dim)
+        self.fuse_embedding_o = nn.Embedding(num_embeddings=self.fuse_len, embedding_dim=fuse_embed_dim)
         # positional encoding
         self.time_pos_encoder = nn.Embedding(num_embeddings=600, embedding_dim=self.embedding_dim)
         self.time_pos_encoder_o = nn.Embedding(num_embeddings=600, embedding_dim=self.embedding_dim)
@@ -164,16 +163,21 @@ class TreeLSTM(nn.Module):
 
         return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o
 
-    def get_embedding(self, y_POI, y_cat, y_coo):
-        return self.fuse_embedding(y_POI), self.fuse_embedding(y_cat), self.fuse_embedding(y_coo)
+    def get_embedding(self, y_POI, y_cat, y_coo, user):
+        y_POI_emb = torch.cat((self.fuse_embedding(y_POI), self.user_embedding(user)), dim=1)
+        y_cat_emb = torch.cat((self.fuse_embedding(y_cat), self.user_embedding(user)), dim=1)
+        y_coo_emb = torch.cat((self.fuse_embedding(y_coo), self.user_embedding(user)), dim=1)
+        return y_POI_emb, y_cat_emb, y_coo_emb
+
+    def get_embedding_test(self, y_POI, y_cat, y_coo, user):
+        return self.fuse_embedding(y_POI), self.fuse_embedding(y_cat), self.fuse_embedding(y_coo), self.user_embedding(
+            user)
 
 
 class KnowledgeGraph(nn.Module):
-    def __init__(self, h_size, rel_num, dim, num_POIs):
+    def __init__(self, h_size, dim, num_POIs):
         super(KnowledgeGraph, self).__init__()
         self.head_embedding = nn.Linear(h_size, dim)
-        # self.tail_embedding = nn.Embedding(rel_num, dim)
-        # self.relation_embedding = nn.Embedding(rel_num, dim)
         self.W_h = nn.Linear(dim, dim)
         self.W_t = nn.Linear(dim, dim)
         self.W_r = nn.Linear(dim * 2, dim)
@@ -181,10 +185,6 @@ class KnowledgeGraph(nn.Module):
 
     def forward(self, head, tail, relation):
         head = F.normalize(self.head_embedding(head), 2, -1)
-        # tail = F.normalize(self.tail_embedding(tail), 2, -1)
-        # cat, coo = relation
-        # cat = F.normalize(self.relation_embedding(cat), 2, -1)
-        # coo = F.normalize(self.relation_embedding(coo), 2, -1)
         tail = F.normalize(tail, 2, -1)
         cat, coo = relation
         cat = F.normalize(cat, 2, -1)
@@ -199,14 +199,20 @@ class KnowledgeGraph(nn.Module):
         score = torch.norm(score, 1, -1).flatten()
         return score
 
-    def predict(self, head, tail, relation):
+    def predict(self, head, tail, relation, user):
         """
         tail and relation are fixed, their shapes are [num_POI, embedding_dim]
         """
         recommendation_list = []
-        for he in head:
-            he = he.expand(tail.size(0), -1)
-            score_matrix = self.forward(he, tail, relation)  # [1, num_POI]
+        for i in range(len(head)):
+            he = head[i].expand(tail.size(0), -1)
+            u = user[i].expand(tail.size(0), -1)
+            ta = torch.cat((tail, u), dim=1)
+            cat, coo = relation
+            cat = torch.cat((cat, u), dim=1)
+            coo = torch.cat((coo, u), dim=1)
+            rel = (cat, coo)
+            score_matrix = self.forward(he, ta, rel)  # [1, num_POI]
             recommendation_list.append(score_matrix.unsqueeze(0))
         recommendation_list = torch.cat(recommendation_list, dim=0)
         return recommendation_list

@@ -193,12 +193,12 @@ if __name__ == '__main__':
     TreeLSTM_model = TreeLSTM(h_size=args.h_size,
                               embed_dropout=args.embed_dropout, model_dropout=args.model_dropout,
                               num_users=num_users, user_embed_dim=args.user_embed_dim,
-                              num_POIs=num_POIs, POI_embed_dim=args.POI_embed_dim,
-                              num_cats=num_cats, cat_embed_dim=args.cat_embed_dim,
-                              time_embed_dim=args.time_embed_dim,
-                              num_coos=n_clusters, coo_embed_dim=args.coo_embed_dim,
+                              num_POIs=num_POIs, fuse_embed_dim=args.fuse_embed_dim,
+                              num_cats=num_cats, num_coos=n_clusters,
                               nary=args.nary + 2, device=args.device).to(device=args.device)
-    KG_model = KnowledgeGraph(args.h_size, fuse_len, args.POI_embed_dim, num_POIs).to(device=args.device)
+    KG_model = KnowledgeGraph(h_size=args.h_size,
+                              dim=args.fuse_embed_dim + args.user_embed_dim,
+                              num_POIs=num_POIs).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)
@@ -264,7 +264,7 @@ if __name__ == '__main__':
             y_POI_o, y_cat_o, y_tim_o, y_coo_o = \
                 out_trees.label[:, 0], out_trees.label[:, 1], out_trees.label[:, 2], out_trees.label[:, 3]
 
-            y_POI_emb, y_cat_emb, y_coo_emb = TreeLSTM_model.get_embedding(y_POI, y_cat, y_coo)
+            y_POI_emb, y_cat_emb, y_coo_emb = TreeLSTM_model.get_embedding(y_POI, y_cat, y_coo, in_trees.user.long())
             pos_score = KG_model(h, y_POI_emb, (y_cat_emb, y_coo_emb))
             shuffled_indices = torch.randperm(len(y_POI_emb))
             neg_score = KG_model(h, y_POI_emb[shuffled_indices],
@@ -338,9 +338,11 @@ if __name__ == '__main__':
 
                 y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o = \
                     TreeLSTM_model(in_trees, out_trees)
-                y_POI_emb, y_cat_emb, y_coo_emb = TreeLSTM_model.get_embedding(candidate_tail, candidate_cat,
-                                                                               candidate_coo)
-                KG_recommendation_list = KG_model.predict(h, y_POI_emb, (y_cat_emb, y_coo_emb))
+                y_POI_emb, y_cat_emb, y_coo_emb, user_emb = TreeLSTM_model.get_embedding_test(candidate_tail,
+                                                                                              candidate_cat,
+                                                                                              candidate_coo,
+                                                                                              in_trees.user.long())
+                KG_recommendation_list = KG_model.predict(h, y_POI_emb, (y_cat_emb, y_coo_emb), user_emb)
 
                 y_POI, y_cat, y_tim, y_coo = \
                     in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2], in_trees.label[:, 3]

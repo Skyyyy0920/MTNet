@@ -35,18 +35,10 @@ def get_args():
                         type=int,
                         default=128,
                         help='User embedding dimensions')
-    parser.add_argument('--POI_embed_dim',
+    parser.add_argument('--fuse_embed_dim',
                         type=int,
                         default=128,
                         help='POI embedding dimensions')
-    parser.add_argument('--time_embed_dim',
-                        type=int,
-                        default=32,
-                        help='Time embedding dimensions')
-    parser.add_argument('--cat_embed_dim',
-                        type=int,
-                        default=32,
-                        help='Category embedding dimensions')
     parser.add_argument('--lon_parts',
                         type=int,
                         default=32,
@@ -55,10 +47,6 @@ def get_args():
                         type=int,
                         default=32,
                         help='latitude part number')
-    parser.add_argument('--coo_embed_dim',
-                        type=int,
-                        default=32,
-                        help='Coordinate embedding dimensions')
     parser.add_argument('--embed_dropout',
                         type=float,
                         default=0.2,
