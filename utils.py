@@ -172,7 +172,7 @@ def construct_dgl_tree(trajectory, nary, need_plot, tree_type):
     return dgl_tree
 
 
-def add_children_heterogeneous(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
+def add_heterogeneous_children(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
     node = trajectory[index]
     idx2idx_dict[index] = tree.number_of_nodes()
     tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
@@ -182,7 +182,7 @@ def add_children_heterogeneous(tree, trajectory, index, idx2idx_dict, flag_dict,
         flag_dict[index] = 0  # already play as parent node
         for i in range(1, nary + 1, 1):
             if index - i >= 0:
-                add_children_heterogeneous(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
+                add_heterogeneous_children(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
                 tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
             else:  # fictitious node
                 node_id = tree.number_of_nodes()
@@ -199,7 +199,7 @@ def add_children_heterogeneous(tree, trajectory, index, idx2idx_dict, flag_dict,
     return
 
 
-def add_children_heterogeneous_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
+def add_heterogeneous_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
     re_index = len(trajectory) - 1 - index
     max_index = re_index
     node = trajectory[re_index]
@@ -217,7 +217,7 @@ def add_children_heterogeneous_out(tree, trajectory, index, idx2idx_dict, flag_d
                 tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
                 max_index = len(trajectory) - 1
             else:
-                child_idx = add_children_heterogeneous_out(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
+                child_idx = add_heterogeneous_children_out(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
                 max_index = child_idx if max_index < child_idx else max_index
                 tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
 
@@ -233,16 +233,16 @@ def add_children_heterogeneous_out(tree, trajectory, index, idx2idx_dict, flag_d
     return max_index
 
 
-def construct_heterogeneous(trajectory, nary, need_plot, tree_type):
+def construct_MobilityTree(trajectory, nary, need_plot, tree_type):
     tree = nx.DiGraph()
     idx2idx_dict = {}
     flag_dict = dict(zip(range(len(trajectory)), np.ones(len(trajectory))))
 
     start_index = len(trajectory) - 1
     if tree_type == 'in':
-        add_children_heterogeneous(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
+        add_heterogeneous_children(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
     elif tree_type == 'out':  # out tree
-        add_children_heterogeneous_out(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
+        add_heterogeneous_children_out(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
     else:
         print("Tree type wrong!")
 

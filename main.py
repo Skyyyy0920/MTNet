@@ -236,9 +236,9 @@ if __name__ == '__main__':
         for b_idx, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc="Training"):
             in_tree_batcher, out_tree_batcher = [], []
             for trajectory in batch:
-                traj_in_tree = construct_heterogeneous(trajectory, args.nary, args.plot_tree, 'in')
+                traj_in_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'in')
                 in_tree_batcher.append(traj_in_tree.to(args.device))
-                traj_out_tree = construct_heterogeneous(trajectory, args.nary, args.plot_tree, 'out')
+                traj_out_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'out')
                 out_tree_batcher.append(traj_out_tree.to(args.device))
 
             in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
@@ -316,9 +316,9 @@ if __name__ == '__main__':
             for batch in test_dataloader:
                 in_tree_batcher, out_tree_batcher = [], []
                 for trajectory in batch:
-                    traj_in_tree = construct_heterogeneous(trajectory, args.nary, args.plot_tree, 'in')
+                    traj_in_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'in')
                     in_tree_batcher.append(traj_in_tree.to(args.device))
-                    traj_out_tree = construct_heterogeneous(trajectory, args.nary, args.plot_tree, 'out')
+                    traj_out_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'out')
                     out_tree_batcher.append(traj_out_tree.to(args.device))
 
                 in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
