@@ -163,15 +163,14 @@ class TreeLSTM(nn.Module):
 
         return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o
 
-    def get_embedding(self, y_POI, y_cat, y_coo, user):
-        y_POI_emb = torch.cat((self.fuse_embedding(y_POI), self.user_embedding(user)), dim=1)
-        y_cat_emb = torch.cat((self.fuse_embedding(y_cat), self.user_embedding(user)), dim=1)
-        y_coo_emb = torch.cat((self.fuse_embedding(y_coo), self.user_embedding(user)), dim=1)
-        return y_POI_emb, y_cat_emb, y_coo_emb
+    def get_embedding(self, POI, cat, coo, user, tim):
+        tail_emb = torch.cat((self.fuse_embedding(POI), self.user_embedding(user)), dim=1) + self.time_pos_encoder(tim)
+        cat_emb = torch.cat((self.fuse_embedding(cat), self.user_embedding(user)), dim=1) + self.time_pos_encoder(tim)
+        coo_emb = torch.cat((self.fuse_embedding(coo), self.user_embedding(user)), dim=1) + self.time_pos_encoder(tim)
+        return tail_emb, cat_emb, coo_emb
 
-    def get_embedding_test(self, y_POI, y_cat, y_coo, user):
-        return self.fuse_embedding(y_POI), self.fuse_embedding(y_cat), self.fuse_embedding(y_coo), self.user_embedding(
-            user)
+    def get_embedding_test(self, POI, cat, coo, user):
+        return self.fuse_embedding(POI), self.fuse_embedding(cat), self.fuse_embedding(coo), self.user_embedding(user)
 
 
 class KnowledgeGraph(nn.Module):
