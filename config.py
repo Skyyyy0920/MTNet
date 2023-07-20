@@ -41,11 +41,11 @@ def get_args():
                         help='POI embedding dimensions')
     parser.add_argument('--lon_parts',
                         type=int,
-                        default=32,
+                        default=128,
                         help='longitude part number')
     parser.add_argument('--lat_parts',
                         type=int,
-                        default=32,
+                        default=128,
                         help='latitude part number')
     parser.add_argument('--embed_dropout',
                         type=float,

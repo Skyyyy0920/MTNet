@@ -130,11 +130,6 @@ if __name__ == '__main__':
     cat_id2idx_dict = dict(zip(cat_ids, range(fuse_len, fuse_len + len(cat_ids))))
     fuse_len = fuse_len + len(cat_id2idx_dict)
 
-    num_users = len(user_id2idx_dict)
-    num_POIs = len(POI_id2idx_dict)
-    num_cats = len(cat_id2idx_dict)
-    print(f"users: {num_users}, POIs: {num_POIs}, cats: {num_cats}")
-
     n_clusters = args.lon_parts * args.lat_parts
     max_lon, min_lon = train_df.loc[:, "longitude"].max() + 1, train_df.loc[:, "longitude"].min() - 1
     max_lat, min_lat = train_df.loc[:, "latitude"].max() + 1, train_df.loc[:, "latitude"].min() - 1
@@ -152,6 +147,12 @@ if __name__ == '__main__':
     # val_df['coo_label'] = val_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
     test_df['coo_label'] = test_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
     fuse_len = fuse_len + args.lon_parts * args.lat_parts
+
+    num_users = len(user_id2idx_dict)
+    num_POIs = len(POI_id2idx_dict)
+    num_cats = len(cat_id2idx_dict)
+    num_unique_values = train_df['coo_label'].nunique()
+    print(f"users: {num_users}, POIs: {num_POIs}, cats: {num_cats}, coos: {num_unique_values}")
 
     POI2user_dict = train_df.groupby('POI_id')['user_id'].apply(set).to_dict()
     POI2cat_dict = train_df.groupby('POI_id')['POI_catid'].apply(set).to_dict()
