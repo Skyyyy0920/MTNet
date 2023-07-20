@@ -154,25 +154,6 @@ if __name__ == '__main__':
     num_unique_values = train_df['coo_label'].nunique()
     print(f"users: {num_users}, POIs: {num_POIs}, cats: {num_cats}, coos: {num_unique_values}")
 
-    POI2user_dict = train_df.groupby('POI_id')['user_id'].apply(set).to_dict()
-    POI2cat_dict = train_df.groupby('POI_id')['POI_catid'].apply(set).to_dict()
-    POI2coo_dict = train_df.groupby('POI_id')['coo_label'].apply(set).to_dict()
-    POI_id2user_id_dict, POI_id2cat_id_dict, POI_id2coo_id_dict = {}, {}, {}
-    for key in POI2user_dict.keys():
-        POI_id2user_id_dict[POI_id2idx_dict[key]] = user_id2idx_dict[str(list(POI2user_dict[key])[0])]
-    for key in POI2cat_dict.keys():
-        POI_id2cat_id_dict[POI_id2idx_dict[key]] = cat_id2idx_dict[list(POI2cat_dict[key])[0]]
-    for key in POI2coo_dict.keys():
-        POI_id2coo_id_dict[POI_id2idx_dict[key]] = list(POI2coo_dict[key])[0]
-
-    candidate_tail, candidate_cat, candidate_coo = [], [], []
-    for i in range(num_POIs):
-        candidate_tail.append(i)
-        candidate_cat.append(POI_id2cat_id_dict[i])
-        candidate_coo.append(POI_id2coo_id_dict[i])
-    candidate_tail, candidate_cat, candidate_coo = torch.tensor(candidate_tail).to(args.device), torch.tensor(
-        candidate_cat).to(args.device), torch.tensor(candidate_coo).to(args.device)
-
     # Build dataset
     map_set = (user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict)
     train_dataset = TrajectoryTrainDataset(train_df, map_set)
@@ -183,7 +164,7 @@ if __name__ == '__main__':
                                   pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
     # val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False,
     #                             pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
-    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False,
+    test_dataloader = DataLoader(test_dataset, batch_size=128, shuffle=False, drop_last=False,
                                  pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
 
     # ==================================================================================================
