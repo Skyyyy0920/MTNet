@@ -197,18 +197,11 @@ if __name__ == '__main__':
                               num_POIs=num_POIs, fuse_embed_dim=args.fuse_embed_dim,
                               num_cats=num_cats, num_coos=n_clusters,
                               nary=args.nary + 2, device=args.device).to(device=args.device)
-    KG_model = KnowledgeGraph(h_size=args.h_size,
-                              dim=args.fuse_embed_dim + args.user_embed_dim,
-                              num_POIs=num_POIs).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)
     criterion_coo = nn.CrossEntropyLoss(ignore_index=-1)
-    criterion_KG = MarginLoss(margin=8.0).to(device=args.device)
-    optimizer = torch.optim.Adam(params=list(TreeLSTM_model.parameters())
-                                        + list(KG_model.parameters())
-                                        + list(criterion_KG.parameters()),
-                                 lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(params=list(TreeLSTM_model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_gamma)
 
     # ==================================================================================================
@@ -233,7 +226,6 @@ if __name__ == '__main__':
         TreeLSTM_model.train()
         TreeLSTM_model.cell.train()
         TreeLSTM_model.cell_o.train()
-        KG_model.train()
 
         loss_list = []
 
@@ -268,17 +260,10 @@ if __name__ == '__main__':
             y_POI_o, y_cat_o, y_tim_o, y_coo_o = \
                 out_trees.label[:, 0], out_trees.label[:, 1], out_trees.label[:, 2], out_trees.label[:, 3]
 
-            tail_emb, cat_emb, coo_emb = TreeLSTM_model.get_embedding(y_POI, y_cat, y_coo,
-                                                                      in_trees.user.long(), in_trees.time.long())
-            pos_score = KG_model(h, tail_emb, (cat_emb, coo_emb))
-            shuffled_indices = torch.randperm(len(tail_emb))
-            neg_score = KG_model(h, tail_emb[shuffled_indices], (cat_emb[shuffled_indices], coo_emb[shuffled_indices]))
-            loss_KG = criterion_KG(pos_score, neg_score)
-
             loss_POI = criterion_POI(y_pred_POI, y_POI.long()) + criterion_POI(y_pred_POI_o, y_POI_o.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long()) + criterion_cat(y_pred_cat_o, y_cat_o.long())
             loss_coo = criterion_coo(y_pred_coo, y_coo.long()) + criterion_coo(y_pred_coo_o, y_coo_o.long())
-            loss = loss_POI + loss_cat + loss_coo + loss_KG
+            loss = loss_POI + loss_cat + loss_coo
             loss_list.append(loss.item())
             loss.backward()
 
@@ -309,11 +294,9 @@ if __name__ == '__main__':
         TreeLSTM_model.eval()
         TreeLSTM_model.cell.eval()
         TreeLSTM_model.cell_o.eval()
-        KG_model.eval()
 
         with torch.no_grad():
             y_pred_POI_list, y_label_POI_list = [], []
-            y_KG_POI_list = []
             y_pred_cat_list, y_label_cat_list = [], []
             y_pred_coo_list, y_label_coo_list = [], []
             # Start testing
@@ -342,21 +325,14 @@ if __name__ == '__main__':
 
                 y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o = \
                     TreeLSTM_model(in_trees, out_trees)
-                tail_emb, cat_emb, coo_emb, user_emb, time_emb = TreeLSTM_model.get_embedding_test(candidate_tail,
-                                                                                                   candidate_cat,
-                                                                                                   candidate_coo,
-                                                                                                   in_trees.user.long(),
-                                                                                                   in_trees.time.long())
-                KG_recommendation_list = KG_model.predict(h, tail_emb, (cat_emb, coo_emb), user_emb, time_emb)
 
                 y_POI, y_cat, y_tim, y_coo = \
                     in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2], in_trees.label[:, 3]
 
-                y_pred_POI_all = y_pred_POI + y_pred_POI_o + KG_recommendation_list * -0.3
+                y_pred_POI_all = y_pred_POI + y_pred_POI_o
                 y_pred_cat_all = y_pred_cat + y_pred_cat_o
                 y_pred_coo_all = y_pred_coo + y_pred_coo_o
                 y_pred_POI_list.append(y_pred_POI_all.detach().cpu().numpy())
-                y_KG_POI_list.append(KG_recommendation_list.detach().cpu().numpy())
                 y_label_POI_list.append(y_POI.detach().cpu().numpy())
                 y_pred_cat_list.append(y_pred_cat_all.detach().cpu().numpy())
                 y_label_cat_list.append(y_cat.detach().cpu().numpy())
@@ -364,7 +340,6 @@ if __name__ == '__main__':
                 y_label_coo_list.append(y_coo.detach().cpu().numpy())
 
             y_label_POI_numpy, y_pred_POI_numpy = get_pred_label(y_label_POI_list, y_pred_POI_list)
-            y_KG_POI_numpy = np.concatenate(y_KG_POI_list, axis=0)
             y_label_cat_numpy, y_pred_cat_numpy = get_pred_label(y_label_cat_list, y_pred_cat_list)
             y_label_coo_numpy, y_pred_coo_numpy = get_pred_label(y_label_coo_list, y_pred_coo_list)
 
