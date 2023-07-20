@@ -204,7 +204,10 @@ if __name__ == '__main__':
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)
     criterion_coo = nn.CrossEntropyLoss(ignore_index=-1)
     criterion_KG = MarginLoss(margin=8.0).to(device=args.device)
-    optimizer = torch.optim.Adam(params=list(TreeLSTM_model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(params=list(TreeLSTM_model.parameters())
+                                        + list(KG_model.parameters())
+                                        + list(criterion_KG.parameters()),
+                                 lr=args.lr, weight_decay=args.weight_decay)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_gamma)
 
     # ==================================================================================================
@@ -274,7 +277,7 @@ if __name__ == '__main__':
             loss_POI = criterion_POI(y_pred_POI, y_POI.long()) + criterion_POI(y_pred_POI_o, y_POI_o.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long()) + criterion_cat(y_pred_cat_o, y_cat_o.long())
             loss_coo = criterion_coo(y_pred_coo, y_coo.long()) + criterion_coo(y_pred_coo_o, y_coo_o.long())
-            loss = loss_POI + loss_cat + loss_coo + loss_KG * 5
+            loss = loss_POI + loss_cat + loss_coo + loss_KG
             loss_list.append(loss.item())
             loss.backward()
 
