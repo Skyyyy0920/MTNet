@@ -169,8 +169,9 @@ class TreeLSTM(nn.Module):
         coo_emb = torch.cat((self.fuse_embedding(coo), self.user_embedding(user)), dim=1) + self.time_pos_encoder(tim)
         return tail_emb, cat_emb, coo_emb
 
-    def get_embedding_test(self, POI, cat, coo, user):
-        return self.fuse_embedding(POI), self.fuse_embedding(cat), self.fuse_embedding(coo), self.user_embedding(user)
+    def get_embedding_test(self, POI, cat, coo, user, tim):
+        return self.fuse_embedding(POI), self.fuse_embedding(cat), self.fuse_embedding(coo), self.user_embedding(
+            user), self.time_pos_encoder(tim)
 
 
 class KnowledgeGraph(nn.Module):
@@ -198,7 +199,7 @@ class KnowledgeGraph(nn.Module):
         score = torch.norm(score, 1, -1).flatten()
         return score
 
-    def predict(self, head, tail, relation, user):
+    def predict(self, head, tail, relation, user, tim):
         """
         tail and relation are fixed, their shapes are [num_POI, embedding_dim]
         """
@@ -206,10 +207,11 @@ class KnowledgeGraph(nn.Module):
         for i in range(len(head)):
             he = head[i].expand(tail.size(0), -1)
             u = user[i].expand(tail.size(0), -1)
-            ta = torch.cat((tail, u), dim=1)
+            t = tim[i].expand(tail.size(0), -1)
+            ta = torch.cat((tail, u), dim=1) + t
             cat, coo = relation
-            cat = torch.cat((cat, u), dim=1)
-            coo = torch.cat((coo, u), dim=1)
+            cat = torch.cat((cat, u), dim=1) + t
+            coo = torch.cat((coo, u), dim=1) + t
             rel = (cat, coo)
             score_matrix = self.forward(he, ta, rel)  # [1, num_POI]
             recommendation_list.append(score_matrix.unsqueeze(0))

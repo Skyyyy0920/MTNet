@@ -338,11 +338,12 @@ if __name__ == '__main__':
 
                 y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o = \
                     TreeLSTM_model(in_trees, out_trees)
-                tail_emb, cat_emb, coo_emb, user_emb = TreeLSTM_model.get_embedding_test(candidate_tail,
-                                                                                         candidate_cat,
-                                                                                         candidate_coo,
-                                                                                         in_trees.user.long())
-                KG_recommendation_list = KG_model.predict(h, tail_emb, (cat_emb, coo_emb), user_emb)
+                tail_emb, cat_emb, coo_emb, user_emb, time_emb = TreeLSTM_model.get_embedding_test(candidate_tail,
+                                                                                                   candidate_cat,
+                                                                                                   candidate_coo,
+                                                                                                   in_trees.user.long(),
+                                                                                                   in_trees.time.long())
+                KG_recommendation_list = KG_model.predict(h, tail_emb, (cat_emb, coo_emb), user_emb, time_emb)
 
                 y_POI, y_cat, y_tim, y_coo = \
                     in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2], in_trees.label[:, 3]
