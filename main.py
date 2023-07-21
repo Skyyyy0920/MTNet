@@ -187,11 +187,14 @@ if __name__ == '__main__':
                               num_POIs=num_POIs, fuse_embed_dim=args.fuse_embed_dim,
                               num_cats=num_cats, num_coos=50,
                               nary=args.nary + 2, device=args.device).to(device=args.device)
+    multi_task_loss = MultiTaskLoss(3).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)
     criterion_coo = nn.CrossEntropyLoss(ignore_index=-1)
-    optimizer = torch.optim.Adam(params=list(TreeLSTM_model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(params=list(TreeLSTM_model.parameters())
+                                        + list(multi_task_loss.parameters()),
+                                 lr=args.lr, weight_decay=args.weight_decay)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_gamma)
 
     # ==================================================================================================
@@ -253,7 +256,7 @@ if __name__ == '__main__':
             loss_POI = criterion_POI(y_pred_POI, y_POI.long()) + criterion_POI(y_pred_POI_o, y_POI_o.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long()) + criterion_cat(y_pred_cat_o, y_cat_o.long())
             loss_coo = criterion_coo(y_pred_coo, y_coo.long()) + criterion_coo(y_pred_coo_o, y_coo_o.long())
-            loss = loss_POI + loss_cat + loss_coo
+            loss = multi_task_loss(loss_POI, loss_cat, loss_coo)
             loss_list.append(loss.item())
             loss.backward()
 

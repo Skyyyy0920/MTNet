@@ -2,6 +2,7 @@ import dgl
 import math
 import torch
 import torch.nn as nn
+from typing import Union
 import torch.nn.functional as F
 
 
@@ -48,8 +49,7 @@ class TreeLSTM(nn.Module):
                  embed_dropout=0.2, model_dropout=0.4,
                  num_users=3000, user_embed_dim=128,
                  num_POIs=5000, fuse_embed_dim=128,
-                 num_cats=300, cat_embed_dim=32,
-                 num_coos=1024, coo_embed_dim=64,
+                 num_cats=300, num_coos=1024,
                  nary=3, device='cuda'):
         super(TreeLSTM, self).__init__()
         self.device = device
@@ -57,7 +57,7 @@ class TreeLSTM(nn.Module):
         self.nary = nary
         # embedding
         self.embedding_dim = user_embed_dim + fuse_embed_dim
-        self.fuse_len = num_POIs + num_cats + num_coos + 24
+        self.fuse_len = num_POIs + num_cats + num_coos
         self.user_embedding = nn.Embedding(num_embeddings=num_users, embedding_dim=user_embed_dim)
         self.fuse_embedding = nn.Embedding(num_embeddings=self.fuse_len, embedding_dim=fuse_embed_dim)
         self.user_embedding_o = nn.Embedding(num_embeddings=num_users, embedding_dim=user_embed_dim)
@@ -88,7 +88,7 @@ class TreeLSTM(nn.Module):
 
         user_embedding_o = self.user_embedding_o(out_trees.user.long() * out_trees.mask)
         fuse_embedding_o = self.fuse_embedding_o(out_trees.features.long() * out_trees.mask)
-        pe_o = self.time_pos_encoder_o(out_trees.time.long() * in_trees.mask)
+        pe_o = self.time_pos_encoder_o(out_trees.time.long() * out_trees.mask)
         concat_embedding_o = torch.cat((user_embedding_o, fuse_embedding_o), dim=1)
         concat_embedding_o = concat_embedding_o + pe_o * 0.5
 
@@ -96,10 +96,10 @@ class TreeLSTM(nn.Module):
         n = g.num_nodes()
         g.ndata["iou"] = self.cell.W_iou(self.embed_dropout(concat_embedding)) * in_trees.mask.float().unsqueeze(-1)
         g.ndata["x"] = self.embed_dropout(concat_embedding) * in_trees.mask.float().unsqueeze(-1)
-        g.ndata["h"] = torch.zeros((n, self.h_size)).to(self.device)
-        g.ndata["c"] = torch.zeros((n, self.h_size)).to(self.device)
-        g.ndata["h_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
-        g.ndata["c_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
+        g.ndata["h"] = nn.init.xavier_uniform_(torch.zeros((n, self.h_size)).to(self.device))
+        g.ndata["c"] = nn.init.xavier_uniform_(torch.zeros((n, self.h_size)).to(self.device))
+        g.ndata["h_child"] = nn.init.xavier_uniform_(torch.zeros((n, self.nary, self.h_size)).to(self.device))
+        g.ndata["c_child"] = nn.init.xavier_uniform_(torch.zeros((n, self.nary, self.h_size)).to(self.device))
 
         dgl.prop_nodes_topo(graph=g,
                             message_func=self.cell.message_func,
@@ -117,10 +117,10 @@ class TreeLSTM(nn.Module):
         g_o.ndata["iou"] = self.cell_o.W_iou(self.embed_dropout(concat_embedding_o)) \
                            * out_trees.mask.float().unsqueeze(-1)
         g_o.ndata["x"] = self.embed_dropout(concat_embedding_o) * out_trees.mask.float().unsqueeze(-1)
-        g_o.ndata["h"] = torch.zeros((n, self.h_size)).to(self.device)
-        g_o.ndata["c"] = torch.zeros((n, self.h_size)).to(self.device)
-        g_o.ndata["h_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
-        g_o.ndata["c_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
+        g_o.ndata["h"] = nn.init.xavier_uniform_(torch.zeros((n, self.h_size)).to(self.device))
+        g_o.ndata["c"] = nn.init.xavier_uniform_(torch.zeros((n, self.h_size)).to(self.device))
+        g_o.ndata["h_child"] = nn.init.xavier_uniform_(torch.zeros((n, self.nary, self.h_size)).to(self.device))
+        g_o.ndata["c_child"] = nn.init.xavier_uniform_(torch.zeros((n, self.nary, self.h_size)).to(self.device))
 
         dgl.prop_nodes_topo(graph=g_o,
                             message_func=self.cell_o.message_func,
@@ -134,3 +134,87 @@ class TreeLSTM(nn.Module):
         y_pred_coo_o = self.decoder_coo_o(h_o)
 
         return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o
+
+
+class MultiTaskLoss_1(nn.Module):
+    """Computes and combines the losses for the two tasks.
+
+    Has two modes:
+    1) 'fixed': the losses multiplied by fixed weights and summed
+    2) 'learned': we learn the losses
+    """
+
+    def __init__(self, loss_type, loss_uncertainties, enabled_tasks=(True, True)):
+        """Creates a new instance.
+
+        loss_type: Either 'fixed' or 'learned'
+        loss_uncertainties: A 2 tuple of (uncertainty 1 for confrontation learning,
+        uncertainty 2 for supervised learning).
+
+        If 'fixed' then these should be floats, if 'learned' then they should be torch Parameters.
+        """
+        super().__init__()
+        self.loss_type = loss_type
+        self.loss_uncertainties = loss_uncertainties
+        self.enabled_tasks = enabled_tasks
+
+        self.l1_loss = nn.L1Loss(reduction='sum')
+        self.cross_entropy = nn.CrossEntropyLoss()
+
+    def supervised_loss(self, supervised_input, supervised_target):
+        return self.cross_entropy(supervised_input, supervised_target)
+
+    def confrontation_loss(self, confrontation_output, confrontation_reward):
+        return -torch.log(confrontation_output) * confrontation_reward
+
+    def calculate_total_loss(self, *losses):
+        confrontation_loss, supervised_loss = losses
+        confrontation_uncertainty, supervised_uncertainty = self.loss_uncertainties
+        confrontation_enabled, supervised_enabled = self.enabled_tasks
+
+        loss = 0
+
+        if self.loss_type == 'fixed':
+            if confrontation_enabled:
+                loss += confrontation_uncertainty * confrontation_loss
+            if supervised_enabled:
+                loss += supervised_uncertainty * supervised_loss
+
+        elif self.loss_type == 'learned':
+            if confrontation_enabled:
+                loss += 0.5 * (torch.exp(-confrontation_uncertainty) * confrontation_loss + confrontation_uncertainty)
+            if supervised_enabled:
+                loss += 0.5 * (torch.exp(-supervised_uncertainty) * supervised_loss + supervised_uncertainty)
+        else:
+            raise ValueError
+
+        return loss
+
+    def forward(self, predicted, *target) -> (Union[torch.Tensor, None], (float, float, float)):
+        confrontation_pred, supervised_pred = predicted
+        confrontation_reward, supervised_target = target
+
+        confrontation_enabled, supervised_enabled = self.enabled_tasks
+        confrontation_loss = self.confrontation_loss(confrontation_pred,
+                                                     confrontation_reward) if confrontation_enabled else None
+        supervised_loss = self.supervised_loss(supervised_pred, supervised_target) if supervised_enabled else None
+
+        total_loss = self.calculate_total_loss(confrontation_loss, supervised_loss)
+
+        confrontation_loss_item = confrontation_loss.item() if confrontation_loss is not None else 0
+        supervised_loss_item = supervised_loss.item() if supervised_loss is not None else 0
+
+        return total_loss, (confrontation_loss_item, supervised_loss_item)
+
+
+class MultiTaskLoss(nn.Module):
+    def __init__(self, num=3):
+        super(MultiTaskLoss, self).__init__()
+        params = torch.ones(num, requires_grad=True)
+        self.params = nn.Parameter(params)
+
+    def forward(self, *losses):
+        loss_sum = 0
+        for i, loss in enumerate(losses):
+            loss_sum += 0.5 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
+        return loss_sum
