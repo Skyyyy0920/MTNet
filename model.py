@@ -2,7 +2,6 @@ import dgl
 import math
 import torch
 import torch.nn as nn
-from typing import Union
 import torch.nn.functional as F
 
 
@@ -47,9 +46,8 @@ class TreeLSTM(nn.Module):
     def __init__(self,
                  h_size=512,
                  embed_dropout=0.2, model_dropout=0.4,
-                 num_users=3000, user_embed_dim=128,
-                 num_POIs=5000, fuse_embed_dim=128,
-                 num_cats=300, num_coos=1024,
+                 num_users=2000, num_POIs=5000, num_cats=300, num_coos=50,
+                 user_embed_dim=128, fuse_embed_dim=128,
                  nary=3, device='cuda'):
         super(TreeLSTM, self).__init__()
         self.device = device
@@ -136,85 +134,16 @@ class TreeLSTM(nn.Module):
         return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o
 
 
-class MultiTaskLoss_1(nn.Module):
-    """Computes and combines the losses for the two tasks.
-
-    Has two modes:
-    1) 'fixed': the losses multiplied by fixed weights and summed
-    2) 'learned': we learn the losses
-    """
-
-    def __init__(self, loss_type, loss_uncertainties, enabled_tasks=(True, True)):
-        """Creates a new instance.
-
-        loss_type: Either 'fixed' or 'learned'
-        loss_uncertainties: A 2 tuple of (uncertainty 1 for confrontation learning,
-        uncertainty 2 for supervised learning).
-
-        If 'fixed' then these should be floats, if 'learned' then they should be torch Parameters.
-        """
-        super().__init__()
-        self.loss_type = loss_type
-        self.loss_uncertainties = loss_uncertainties
-        self.enabled_tasks = enabled_tasks
-
-        self.l1_loss = nn.L1Loss(reduction='sum')
-        self.cross_entropy = nn.CrossEntropyLoss()
-
-    def supervised_loss(self, supervised_input, supervised_target):
-        return self.cross_entropy(supervised_input, supervised_target)
-
-    def confrontation_loss(self, confrontation_output, confrontation_reward):
-        return -torch.log(confrontation_output) * confrontation_reward
-
-    def calculate_total_loss(self, *losses):
-        confrontation_loss, supervised_loss = losses
-        confrontation_uncertainty, supervised_uncertainty = self.loss_uncertainties
-        confrontation_enabled, supervised_enabled = self.enabled_tasks
-
-        loss = 0
-
-        if self.loss_type == 'fixed':
-            if confrontation_enabled:
-                loss += confrontation_uncertainty * confrontation_loss
-            if supervised_enabled:
-                loss += supervised_uncertainty * supervised_loss
-
-        elif self.loss_type == 'learned':
-            if confrontation_enabled:
-                loss += 0.5 * (torch.exp(-confrontation_uncertainty) * confrontation_loss + confrontation_uncertainty)
-            if supervised_enabled:
-                loss += 0.5 * (torch.exp(-supervised_uncertainty) * supervised_loss + supervised_uncertainty)
-        else:
-            raise ValueError
-
-        return loss
-
-    def forward(self, predicted, *target) -> (Union[torch.Tensor, None], (float, float, float)):
-        confrontation_pred, supervised_pred = predicted
-        confrontation_reward, supervised_target = target
-
-        confrontation_enabled, supervised_enabled = self.enabled_tasks
-        confrontation_loss = self.confrontation_loss(confrontation_pred,
-                                                     confrontation_reward) if confrontation_enabled else None
-        supervised_loss = self.supervised_loss(supervised_pred, supervised_target) if supervised_enabled else None
-
-        total_loss = self.calculate_total_loss(confrontation_loss, supervised_loss)
-
-        confrontation_loss_item = confrontation_loss.item() if confrontation_loss is not None else 0
-        supervised_loss_item = supervised_loss.item() if supervised_loss is not None else 0
-
-        return total_loss, (confrontation_loss_item, supervised_loss_item)
-
-
 class MultiTaskLoss(nn.Module):
     def __init__(self, num=3):
         super(MultiTaskLoss, self).__init__()
+        # params = nn.init.xavier_uniform_(torch.ones(num, requires_grad=True))
         params = torch.ones(num, requires_grad=True)
         self.params = nn.Parameter(params)
 
     def forward(self, *losses):
         loss_sum = 0
         for i, loss in enumerate(losses):
-            loss_sum += 0.5 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
+            # loss_sum += 0.5 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
+            loss_sum += 0.5 * torch.exp(-self.params[i]) * loss + self.params[i]
         return loss_sum

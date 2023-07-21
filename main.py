@@ -183,9 +183,8 @@ if __name__ == '__main__':
 
     TreeLSTM_model = TreeLSTM(h_size=args.h_size,
                               embed_dropout=args.embed_dropout, model_dropout=args.model_dropout,
-                              num_users=num_users, user_embed_dim=args.user_embed_dim,
-                              num_POIs=num_POIs, fuse_embed_dim=args.fuse_embed_dim,
-                              num_cats=num_cats, num_coos=50,
+                              num_users=num_users, num_POIs=num_POIs, num_cats=num_cats, num_coos=50,
+                              user_embed_dim=args.user_embed_dim, fuse_embed_dim=args.fuse_embed_dim,
                               nary=args.nary + 2, device=args.device).to(device=args.device)
     multi_task_loss = MultiTaskLoss(3).to(device=args.device)
 
