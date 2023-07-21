@@ -3,34 +3,6 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
-
-
-# class PositionalEncoding(nn.Module):
-#     def __init__(self, d_model, max_len=500):
-#         super(PositionalEncoding, self).__init__()
-#
-#         pe = torch.zeros(max_len, d_model)
-#         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-#         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-#         pe[:, 0::2] = torch.sin(position * div_term)
-#         pe[:, 1::2] = torch.cos(position * div_term)
-#         pe = pe.unsqueeze(0).transpose(0, 1)
-#         self.register_buffer('pe', pe)
-#
-#     def forward(self, x):
-#         x = x + self.pe[:x.size(0), :]
-#         return x
-
-
-class PositionalEncoding(nn.Embedding):
-    def __init__(self, d_model, max_len=5000):
-        super().__init__(max_len, d_model)
-
-    def forward(self, x):
-        weight = self.weight.data.unsqueeze(1)
-        x = x + weight[:x.size(0), :]
-        return x
 
 
 class Cell(nn.Module):
@@ -161,4 +133,4 @@ class TreeLSTM(nn.Module):
         y_pred_cat_o = self.decoder_cat_o(h_o)
         y_pred_coo_o = self.decoder_coo_o(h_o)
 
-        return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o
+        return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o

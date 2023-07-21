@@ -5,6 +5,7 @@ import pickle
 import zipfile
 import logging
 import collections
+from sklearn.cluster import KMeans
 
 from model import *
 from utils import *
@@ -130,23 +131,31 @@ if __name__ == '__main__':
     cat_id2idx_dict = dict(zip(cat_ids, range(fuse_len, fuse_len + len(cat_ids))))
     fuse_len = fuse_len + len(cat_id2idx_dict)
 
-    n_clusters = args.lon_parts * args.lat_parts
-    max_lon, min_lon = train_df.loc[:, "longitude"].max() + 1, train_df.loc[:, "longitude"].min() - 1
-    max_lat, min_lat = train_df.loc[:, "latitude"].max() + 1, train_df.loc[:, "latitude"].min() - 1
-    column = (max_lon - min_lon) / args.lon_parts
-    row = (max_lat - min_lat) / args.lat_parts
+    # n_clusters = args.lon_parts * args.lat_parts
+    # max_lon, min_lon = train_df.loc[:, "longitude"].max() + 1, train_df.loc[:, "longitude"].min() - 1
+    # max_lat, min_lat = train_df.loc[:, "latitude"].max() + 1, train_df.loc[:, "latitude"].min() - 1
+    # column = (max_lon - min_lon) / args.lon_parts
+    # row = (max_lat - min_lat) / args.lat_parts
+    #
+    #
+    # def gen_coo_ID(lon, lat):
+    #     if lon <= min_lon or lon >= max_lon or lat <= min_lat or lat >= max_lat:
+    #         return -1
+    #     return int((lon - min_lon) / column) + 1 + int((lat - min_lat) / row) * args.lon_parts + fuse_len
+    #
+    #
+    # train_df['coo_label'] = train_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
+    # # val_df['coo_label'] = val_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
+    # test_df['coo_label'] = test_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
+    # fuse_len = fuse_len + args.lon_parts * args.lat_parts
 
-
-    def gen_coo_ID(lon, lat):
-        if lon <= min_lon or lon >= max_lon or lat <= min_lat or lat >= max_lat:
-            return -1
-        return int((lon - min_lon) / column) + 1 + int((lat - min_lat) / row) * args.lon_parts + fuse_len
-
-
-    train_df['coo_label'] = train_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
-    # val_df['coo_label'] = val_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
-    test_df['coo_label'] = test_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
-    fuse_len = fuse_len + args.lon_parts * args.lat_parts
+    data_train = np.column_stack((train_df['longitude'], train_df['latitude']))
+    kmeans_train = KMeans(n_clusters=50)
+    kmeans_train.fit(data_train)
+    train_df['coo_label'] = kmeans_train.labels_ + fuse_len
+    data_test = np.column_stack((test_df['longitude'], test_df['latitude']))
+    test_df['coo_label'] = kmeans_train.predict(data_test) + fuse_len
+    fuse_len = fuse_len + 50
 
     num_users = len(user_id2idx_dict)
     num_POIs = len(POI_id2idx_dict)
@@ -176,7 +185,7 @@ if __name__ == '__main__':
                               embed_dropout=args.embed_dropout, model_dropout=args.model_dropout,
                               num_users=num_users, user_embed_dim=args.user_embed_dim,
                               num_POIs=num_POIs, fuse_embed_dim=args.fuse_embed_dim,
-                              num_cats=num_cats, num_coos=n_clusters,
+                              num_cats=num_cats, num_coos=50,
                               nary=args.nary + 2, device=args.device).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
@@ -233,7 +242,7 @@ if __name__ == '__main__':
                                  label=out_tree_batch.ndata["y"].to(args.device),
                                  mask=out_tree_batch.ndata["mask"].to(args.device))
 
-            y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o = \
+            y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
                 TreeLSTM_model(in_trees, out_trees)
 
             y_POI, y_cat, y_tim, y_coo = \
@@ -304,7 +313,7 @@ if __name__ == '__main__':
                                      label=out_tree_batch.ndata["y"].to(args.device),
                                      mask=out_tree_batch.ndata["mask"].to(args.device))
 
-                y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o = \
+                y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
                     TreeLSTM_model(in_trees, out_trees)
 
                 y_POI, y_cat, y_tim, y_coo = \
