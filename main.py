@@ -124,11 +124,13 @@ if __name__ == '__main__':
     user_id2idx_dict = dict(zip(uid_list, range(len(uid_list))))
     # POI id to index
     POI_list = list(set(train_df['POI_id'].tolist()))
+    POI_list.sort()
     POI_id2idx_dict = dict(zip(POI_list, range(len(POI_list))))
     fuse_len = len(POI_id2idx_dict)
     # Cat id to index
-    cat_ids = list(set(train_df['POI_catid'].tolist()))
-    cat_id2idx_dict = dict(zip(cat_ids, range(fuse_len, fuse_len + len(cat_ids))))
+    cat_list = list(set(train_df['POI_catid'].tolist()))
+    cat_list.sort()
+    cat_id2idx_dict = dict(zip(cat_list, range(fuse_len, fuse_len + len(cat_list))))
     fuse_len = fuse_len + len(cat_id2idx_dict)
 
     # n_clusters = args.lon_parts * args.lat_parts
