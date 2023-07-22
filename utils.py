@@ -70,9 +70,6 @@ def get_performance(y_true_seq, y_pred_seq):
 def get_pred_label(y_label_list, y_pred_list):
     y_label_POI_numpy = np.concatenate(y_label_list, axis=0)
     y_pred_POI_numpy = np.concatenate(y_pred_list, axis=0)
-    # none_label = np.where(y_label_POI_numpy == -1)
-    # y_label_POI_numpy = np.delete(y_label_POI_numpy, none_label)
-    # y_pred_POI_numpy = np.delete(y_pred_POI_numpy, none_label)
     return y_label_POI_numpy, y_pred_POI_numpy
 
 
@@ -178,7 +175,7 @@ def add_heterogeneous_children(tree, trajectory, index, idx2idx_dict, flag_dict,
     tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
                   y=node['labels'], mask=1, type=0)  # add parent node
 
-    if index > 0 and flag_dict[index]:
+    if flag_dict[index]:
         flag_dict[index] = 0  # already play as parent node
         for i in range(1, nary + 1, 1):
             if index - i >= 0:
@@ -187,7 +184,7 @@ def add_heterogeneous_children(tree, trajectory, index, idx2idx_dict, flag_dict,
             else:  # fictitious node
                 node_id = tree.number_of_nodes()
                 tree.add_node(node_id, u=node['features'][0], x=trajectory[0]['features'][1], time=node['time'],
-                              y=[-1] * 4, mask=0, type=0)
+                              y=[-1] * 4, mask=0, type=-1)
                 tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
 
         for i in range(1, 3):
@@ -207,13 +204,13 @@ def add_heterogeneous_children_out(tree, trajectory, index, idx2idx_dict, flag_d
     tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
                   y=node['labels'], mask=1, type=0)
 
-    if index > 0 and flag_dict[index]:
+    if flag_dict[index]:
         flag_dict[index] = 0  # already play as parent node
         for i in range(1, nary + 1, 1):
             if index - i < 0:  # fictitious node
                 node_id = tree.number_of_nodes()
                 tree.add_node(node_id, u=node['features'][0], x=trajectory[-1]['features'][1], time=node['time'],
-                              y=[-1] * 4, mask=0, type=0)
+                              y=[-1] * 4, mask=0, type=-1)
                 tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
                 max_index = len(trajectory) - 1
             else:

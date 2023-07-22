@@ -76,6 +76,14 @@ class TreeLSTM(nn.Module):
         self.decoder_POI_o = nn.Linear(h_size, num_POIs)
         self.decoder_cat_o = nn.Linear(h_size, num_cats)
         self.decoder_coo_o = nn.Linear(h_size, num_coos)
+        # transition matrix
+        self.cat2POI = nn.Linear(num_cats, num_POIs)
+        self.coo2POI = nn.Linear(num_coos, num_POIs)
+        self.cat2POI_o = nn.Linear(num_cats, num_POIs)
+        self.coo2POI_o = nn.Linear(num_coos, num_POIs)
+        # MultiTask
+        self.AutomaticWeighted = MultiTaskLoss(3)
+        self.AutomaticWeighted_o = MultiTaskLoss(3)
 
     def forward(self, in_trees, out_trees):
         user_embedding = self.user_embedding(in_trees.user.long() * in_trees.mask)  # 1694 128
@@ -130,6 +138,10 @@ class TreeLSTM(nn.Module):
         y_pred_POI_o = self.decoder_POI_o(h_o)
         y_pred_cat_o = self.decoder_cat_o(h_o)
         y_pred_coo_o = self.decoder_coo_o(h_o)
+
+        y_pred_POI = self.AutomaticWeighted(y_pred_POI, self.cat2POI(y_pred_cat), self.coo2POI(y_pred_coo))
+        y_pred_POI_o = self.AutomaticWeighted_o(y_pred_POI_o, self.cat2POI_o(y_pred_cat_o),
+                                                self.coo2POI_o(y_pred_coo_o))
 
         return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o
 

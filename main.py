@@ -13,7 +13,7 @@ from config import *
 from dataset import *
 
 SSTBatch = collections.namedtuple(
-    "SSTBatch", ["graph", "user", "features", "time", "label", "mask"]
+    "SSTBatch", ["graph", "user", "features", "time", "label", "mask", "type"]
 )
 
 
@@ -235,14 +235,16 @@ if __name__ == '__main__':
                                 features=in_tree_batch.ndata["x"].to(args.device),
                                 time=in_tree_batch.ndata["time"].to(args.device),
                                 label=in_tree_batch.ndata["y"].to(args.device),
-                                mask=in_tree_batch.ndata["mask"].to(args.device))
+                                mask=in_tree_batch.ndata["mask"].to(args.device),
+                                type=in_tree_batch.ndata["type"].to(args.device))
             out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
             out_trees = SSTBatch(graph=out_tree_batch,
                                  user=out_tree_batch.ndata["u"].to(args.device),
                                  features=out_tree_batch.ndata["x"].to(args.device),
                                  time=out_tree_batch.ndata["time"].to(args.device),
                                  label=out_tree_batch.ndata["y"].to(args.device),
-                                 mask=out_tree_batch.ndata["mask"].to(args.device))
+                                 mask=out_tree_batch.ndata["mask"].to(args.device),
+                                 type=out_tree_batch.ndata["type"].to(args.device))
 
             y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
                 TreeLSTM_model(in_trees, out_trees)
@@ -291,6 +293,9 @@ if __name__ == '__main__':
             y_pred_POI_list, y_label_POI_list = [], []
             y_pred_cat_list, y_label_cat_list = [], []
             y_pred_coo_list, y_label_coo_list = [], []
+            y_pred_POI_list_0, y_label_POI_list_0 = [], []
+            y_pred_POI_list_1, y_label_POI_list_1 = [], []
+            y_pred_POI_list_2, y_label_POI_list_2 = [], []
             # Start testing
             for batch in test_dataloader:
                 in_tree_batcher, out_tree_batcher = [], []
@@ -306,14 +311,16 @@ if __name__ == '__main__':
                                     features=in_tree_batch.ndata["x"].to(args.device),
                                     time=in_tree_batch.ndata["time"].to(args.device),
                                     label=in_tree_batch.ndata["y"].to(args.device),
-                                    mask=in_tree_batch.ndata["mask"].to(args.device))
+                                    mask=in_tree_batch.ndata["mask"].to(args.device),
+                                    type=in_tree_batch.ndata["type"].to(args.device))
                 out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
                 out_trees = SSTBatch(graph=out_tree_batch,
                                      user=out_tree_batch.ndata["u"].to(args.device),
                                      features=out_tree_batch.ndata["x"].to(args.device),
                                      time=out_tree_batch.ndata["time"].to(args.device),
                                      label=out_tree_batch.ndata["y"].to(args.device),
-                                     mask=out_tree_batch.ndata["mask"].to(args.device))
+                                     mask=out_tree_batch.ndata["mask"].to(args.device),
+                                     type=out_tree_batch.ndata["type"].to(args.device))
 
                 y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
                     TreeLSTM_model(in_trees, out_trees)
@@ -324,6 +331,21 @@ if __name__ == '__main__':
                 y_pred_POI_all = y_pred_POI + y_pred_POI_o
                 y_pred_cat_all = y_pred_cat + y_pred_cat_o
                 y_pred_coo_all = y_pred_coo + y_pred_coo_o
+
+                indices_0 = torch.where(in_trees.type == 0)[0]
+                indices_1 = torch.where(in_trees.type == 1)[0]
+                indices_2 = torch.where(in_trees.type == 2)[0]
+                y_pred_POI_0, y_POI_0 = y_pred_POI_all[indices_0], y_POI[indices_0]
+                y_pred_POI_1, y_POI_1 = y_pred_POI_all[indices_1], y_POI[indices_1]
+                y_pred_POI_2, y_POI_2 = y_pred_POI_all[indices_2], y_POI[indices_2]
+
+                y_pred_POI_list_0.append(y_pred_POI_0.detach().cpu().numpy())
+                y_label_POI_list_0.append(y_POI_0.detach().cpu().numpy())
+                y_pred_POI_list_1.append(y_pred_POI_1.detach().cpu().numpy())
+                y_label_POI_list_1.append(y_POI_1.detach().cpu().numpy())
+                y_pred_POI_list_2.append(y_pred_POI_2.detach().cpu().numpy())
+                y_label_POI_list_2.append(y_POI_2.detach().cpu().numpy())
+
                 y_pred_POI_list.append(y_pred_POI_all.detach().cpu().numpy())
                 y_label_POI_list.append(y_POI.detach().cpu().numpy())
                 y_pred_cat_list.append(y_pred_cat_all.detach().cpu().numpy())
@@ -331,14 +353,23 @@ if __name__ == '__main__':
                 y_pred_coo_list.append(y_pred_coo_all.detach().cpu().numpy())
                 y_label_coo_list.append(y_coo.detach().cpu().numpy())
 
+            y_label_POI_numpy_0, y_pred_POI_numpy_0 = get_pred_label(y_label_POI_list_0, y_pred_POI_list_0)
+            y_label_POI_numpy_1, y_pred_POI_numpy_1 = get_pred_label(y_label_POI_list_1, y_pred_POI_list_1)
+            y_label_POI_numpy_2, y_pred_POI_numpy_2 = get_pred_label(y_label_POI_list_2, y_pred_POI_list_2)
+
             y_label_POI_numpy, y_pred_POI_numpy = get_pred_label(y_label_POI_list, y_pred_POI_list)
             y_label_cat_numpy, y_pred_cat_numpy = get_pred_label(y_label_cat_list, y_pred_cat_list)
             y_label_coo_numpy, y_pred_coo_numpy = get_pred_label(y_label_coo_list, y_pred_coo_list)
 
-            # if (epoch + 1) % 5 == 0 and epoch >= 30:
-            #     pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
-            #     pickle.dump(y_KG_POI_numpy, open(os.path.join(save_dir, f"KG_list_{epoch + 1}"), 'wb'))
-            #     pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
+            if epoch >= 30:
+                pickle.dump(y_pred_POI_numpy_0, open(os.path.join(save_dir, f"recommend_list_POI_{epoch + 1}"), 'wb'))
+                pickle.dump(y_pred_POI_numpy_1, open(os.path.join(save_dir, f"recommend_list_cat_{epoch + 1}"), 'wb'))
+                pickle.dump(y_pred_POI_numpy_2, open(os.path.join(save_dir, f"recommend_list_coo_{epoch + 1}"), 'wb'))
+                pickle.dump(y_label_POI_numpy_0, open(os.path.join(save_dir, f"ground_truth_POI_{epoch + 1}"), 'wb'))
+                pickle.dump(y_label_POI_numpy_1, open(os.path.join(save_dir, f"ground_truth_cat_{epoch + 1}"), 'wb'))
+                pickle.dump(y_label_POI_numpy_2, open(os.path.join(save_dir, f"ground_truth_coo_{epoch + 1}"), 'wb'))
+                # pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
+                # pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
 
             # Logging
             logging.info(f"================================ Testing ================================")

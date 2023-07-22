@@ -30,7 +30,7 @@ def get_args():
     parser.add_argument('--nary',
                         type=int,
                         default=1,
-                        help='n-ary tree')  # 3
+                        help='n-ary tree')
     parser.add_argument('--user_embed_dim',
                         type=int,
                         default=128,
