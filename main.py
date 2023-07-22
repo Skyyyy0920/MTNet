@@ -258,7 +258,7 @@ if __name__ == '__main__':
         logging.info(f"Current epoch's mean loss: {np.mean(loss_list)}\t\tlr: {optimizer.param_groups[0]['lr']}")
 
         # Save model
-        if (epoch + 1) % 60 == 0:
+        if (epoch + 1) % 5 == 0 and epoch >= 80:
             checkpoint = {
                 'model_state': TreeLSTM_model.state_dict(),
                 'multi_task_loss_state': multi_task_loss.state_dict(),
@@ -348,15 +348,15 @@ if __name__ == '__main__':
             y_label_cat_numpy, y_pred_cat_numpy = get_pred_label(y_label_cat_list, y_pred_cat_list)
             y_label_coo_numpy, y_pred_coo_numpy = get_pred_label(y_label_coo_list, y_pred_coo_list)
 
-            # if epoch >= 30:
-            #     pickle.dump(y_pred_POI_numpy_0, open(os.path.join(save_dir, f"recommend_list_POI_{epoch + 1}"), 'wb'))
-            #     pickle.dump(y_pred_POI_numpy_1, open(os.path.join(save_dir, f"recommend_list_cat_{epoch + 1}"), 'wb'))
-            #     pickle.dump(y_pred_POI_numpy_2, open(os.path.join(save_dir, f"recommend_list_coo_{epoch + 1}"), 'wb'))
-            #     pickle.dump(y_label_POI_numpy_0, open(os.path.join(save_dir, f"ground_truth_POI_{epoch + 1}"), 'wb'))
-            #     pickle.dump(y_label_POI_numpy_1, open(os.path.join(save_dir, f"ground_truth_cat_{epoch + 1}"), 'wb'))
-            #     pickle.dump(y_label_POI_numpy_2, open(os.path.join(save_dir, f"ground_truth_coo_{epoch + 1}"), 'wb'))
-            #     pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
-            #     pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
+            if epoch >= 80:
+                pickle.dump(y_pred_POI_numpy_0, open(os.path.join(save_dir, f"recommend_list_POI_{epoch + 1}"), 'wb'))
+                pickle.dump(y_pred_POI_numpy_1, open(os.path.join(save_dir, f"recommend_list_cat_{epoch + 1}"), 'wb'))
+                pickle.dump(y_pred_POI_numpy_2, open(os.path.join(save_dir, f"recommend_list_coo_{epoch + 1}"), 'wb'))
+                pickle.dump(y_label_POI_numpy_0, open(os.path.join(save_dir, f"ground_truth_POI_{epoch + 1}"), 'wb'))
+                pickle.dump(y_label_POI_numpy_1, open(os.path.join(save_dir, f"ground_truth_cat_{epoch + 1}"), 'wb'))
+                pickle.dump(y_label_POI_numpy_2, open(os.path.join(save_dir, f"ground_truth_coo_{epoch + 1}"), 'wb'))
+                pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
+                pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
 
             # Logging
             logging.info(f"================================ Testing ================================")

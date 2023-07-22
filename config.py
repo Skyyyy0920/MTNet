@@ -21,8 +21,8 @@ def get_args():
     # Data
     parser.add_argument('--dataset',
                         type=str,
-                        # default='TKY',
                         default='NYC',
+                        # default='TKY',
                         # default='Gowalla-CA',
                         help='Dataset name')
 
@@ -43,14 +43,6 @@ def get_args():
                         type=int,
                         default=50,
                         help='number of cluster for geographic info')
-    parser.add_argument('--lon_parts',
-                        type=int,
-                        default=128,
-                        help='longitude part number')
-    parser.add_argument('--lat_parts',
-                        type=int,
-                        default=128,
-                        help='latitude part number')
     parser.add_argument('--embed_dropout',
                         type=float,
                         default=0.2,
@@ -75,15 +67,15 @@ def get_args():
                         help='Gradient accumulation to solve the GPU memory problem')
     parser.add_argument('--epochs',
                         type=int,
-                        default=120,
-                        help='Number of epochs to train')  # 60
+                        default=80,
+                        help='Number of epochs to train')
     parser.add_argument('--lr',
                         type=float,
                         default=1e-3,
                         help='Initial learning rate')
     parser.add_argument('--lr_step_size',
                         type=int,
-                        default=6,
+                        default=5,
                         help='Learning rate scheduler factor')
     parser.add_argument('--lr_gamma',
                         type=float,
@@ -91,7 +83,7 @@ def get_args():
                         help='Learning rate scheduler factor')
     parser.add_argument('--weight_decay',
                         type=float,
-                        default=1e-4,
+                        default=5e-4,
                         help='Weight decay (L2 loss on parameters)')
 
     # Experiment configuration
