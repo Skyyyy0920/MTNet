@@ -133,37 +133,18 @@ if __name__ == '__main__':
     cat_id2idx_dict = dict(zip(cat_list, range(fuse_len, fuse_len + len(cat_list))))
     fuse_len = fuse_len + len(cat_id2idx_dict)
 
-    # n_clusters = args.lon_parts * args.lat_parts
-    # max_lon, min_lon = train_df.loc[:, "longitude"].max() + 1, train_df.loc[:, "longitude"].min() - 1
-    # max_lat, min_lat = train_df.loc[:, "latitude"].max() + 1, train_df.loc[:, "latitude"].min() - 1
-    # column = (max_lon - min_lon) / args.lon_parts
-    # row = (max_lat - min_lat) / args.lat_parts
-    #
-    #
-    # def gen_coo_ID(lon, lat):
-    #     if lon <= min_lon or lon >= max_lon or lat <= min_lat or lat >= max_lat:
-    #         return -1
-    #     return int((lon - min_lon) / column) + 1 + int((lat - min_lat) / row) * args.lon_parts + fuse_len
-    #
-    #
-    # train_df['coo_label'] = train_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
-    # # val_df['coo_label'] = val_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
-    # test_df['coo_label'] = test_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
-    # fuse_len = fuse_len + args.lon_parts * args.lat_parts
-
     data_train = np.column_stack((train_df['longitude'], train_df['latitude']))
-    kmeans_train = KMeans(n_clusters=50)
+    kmeans_train = KMeans(n_clusters=args.K_cluster)
     kmeans_train.fit(data_train)
     train_df['coo_label'] = kmeans_train.labels_ + fuse_len
     data_test = np.column_stack((test_df['longitude'], test_df['latitude']))
     test_df['coo_label'] = kmeans_train.predict(data_test) + fuse_len
-    fuse_len = fuse_len + 50
+    fuse_len = fuse_len + args.K_cluster
 
     num_users = len(user_id2idx_dict)
     num_POIs = len(POI_id2idx_dict)
     num_cats = len(cat_id2idx_dict)
-    num_unique_values = train_df['coo_label'].nunique()
-    print(f"users: {num_users}, POIs: {num_POIs}, cats: {num_cats}, coos: {num_unique_values}")
+    print(f"users: {num_users}, POIs: {num_POIs}, cats: {num_cats}, coos: {args.K_cluster}")
 
     # Build dataset
     map_set = (user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict)
@@ -185,7 +166,7 @@ if __name__ == '__main__':
 
     TreeLSTM_model = TreeLSTM(h_size=args.h_size,
                               embed_dropout=args.embed_dropout, model_dropout=args.model_dropout,
-                              num_users=num_users, num_POIs=num_POIs, num_cats=num_cats, num_coos=50,
+                              num_users=num_users, num_POIs=num_POIs, num_cats=num_cats, num_coos=args.K_cluster,
                               user_embed_dim=args.user_embed_dim, fuse_embed_dim=args.fuse_embed_dim,
                               nary=args.nary + 2, device=args.device).to(device=args.device)
     multi_task_loss = MultiTaskLoss(3).to(device=args.device)
@@ -205,6 +186,7 @@ if __name__ == '__main__':
         print('\nLoad pre-trained model...')
         checkpoint = torch.load(os.path.join(args.load_path, f"checkpoint_50.pth"))
         TreeLSTM_model.load_state_dict(checkpoint['model_state'])
+        multi_task_loss.load_state_dict(checkpoint['multi_task_loss_state'])
         optimizer.load_state_dict(checkpoint['optimizer_state'])
         lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state'])
 
@@ -220,6 +202,7 @@ if __name__ == '__main__':
         TreeLSTM_model.train()
         TreeLSTM_model.cell.train()
         TreeLSTM_model.cell_o.train()
+        multi_task_loss.train()
 
         loss_list = []
 
@@ -275,9 +258,10 @@ if __name__ == '__main__':
         logging.info(f"Current epoch's mean loss: {np.mean(loss_list)}\t\tlr: {optimizer.param_groups[0]['lr']}")
 
         # Save model
-        if (epoch + 1) % 600 == 0:
+        if (epoch + 1) % 60 == 0:
             checkpoint = {
                 'model_state': TreeLSTM_model.state_dict(),
+                'multi_task_loss_state': multi_task_loss.state_dict(),
                 'optimizer_state': optimizer.state_dict(),
                 'lr_scheduler_state': lr_scheduler.state_dict()
             }
@@ -290,6 +274,7 @@ if __name__ == '__main__':
         TreeLSTM_model.eval()
         TreeLSTM_model.cell.eval()
         TreeLSTM_model.cell_o.eval()
+        multi_task_loss.eval()
 
         with torch.no_grad():
             y_pred_POI_list, y_label_POI_list = [], []
@@ -359,19 +344,19 @@ if __name__ == '__main__':
             y_label_POI_numpy_1, y_pred_POI_numpy_1 = get_pred_label(y_label_POI_list_1, y_pred_POI_list_1)
             y_label_POI_numpy_2, y_pred_POI_numpy_2 = get_pred_label(y_label_POI_list_2, y_pred_POI_list_2)
 
-            y_label_POI_numpy, y_pred_POI_numpy = get_pred_label(y_label_POI_list, y_pred_POI_list)
+            y_label_POI_numpy, y_pred_POI_numpy = get_pred_label(y_label_POI_list_0, y_pred_POI_list_0)
             y_label_cat_numpy, y_pred_cat_numpy = get_pred_label(y_label_cat_list, y_pred_cat_list)
             y_label_coo_numpy, y_pred_coo_numpy = get_pred_label(y_label_coo_list, y_pred_coo_list)
 
-            if epoch >= 30:
-                pickle.dump(y_pred_POI_numpy_0, open(os.path.join(save_dir, f"recommend_list_POI_{epoch + 1}"), 'wb'))
-                pickle.dump(y_pred_POI_numpy_1, open(os.path.join(save_dir, f"recommend_list_cat_{epoch + 1}"), 'wb'))
-                pickle.dump(y_pred_POI_numpy_2, open(os.path.join(save_dir, f"recommend_list_coo_{epoch + 1}"), 'wb'))
-                pickle.dump(y_label_POI_numpy_0, open(os.path.join(save_dir, f"ground_truth_POI_{epoch + 1}"), 'wb'))
-                pickle.dump(y_label_POI_numpy_1, open(os.path.join(save_dir, f"ground_truth_cat_{epoch + 1}"), 'wb'))
-                pickle.dump(y_label_POI_numpy_2, open(os.path.join(save_dir, f"ground_truth_coo_{epoch + 1}"), 'wb'))
-                # pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
-                # pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
+            # if epoch >= 30:
+            #     pickle.dump(y_pred_POI_numpy_0, open(os.path.join(save_dir, f"recommend_list_POI_{epoch + 1}"), 'wb'))
+            #     pickle.dump(y_pred_POI_numpy_1, open(os.path.join(save_dir, f"recommend_list_cat_{epoch + 1}"), 'wb'))
+            #     pickle.dump(y_pred_POI_numpy_2, open(os.path.join(save_dir, f"recommend_list_coo_{epoch + 1}"), 'wb'))
+            #     pickle.dump(y_label_POI_numpy_0, open(os.path.join(save_dir, f"ground_truth_POI_{epoch + 1}"), 'wb'))
+            #     pickle.dump(y_label_POI_numpy_1, open(os.path.join(save_dir, f"ground_truth_cat_{epoch + 1}"), 'wb'))
+            #     pickle.dump(y_label_POI_numpy_2, open(os.path.join(save_dir, f"ground_truth_coo_{epoch + 1}"), 'wb'))
+            #     pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
+            #     pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
 
             # Logging
             logging.info(f"================================ Testing ================================")

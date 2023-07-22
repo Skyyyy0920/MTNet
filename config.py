@@ -39,6 +39,10 @@ def get_args():
                         type=int,
                         default=128,
                         help='POI embedding dimensions')
+    parser.add_argument('--K_cluster',
+                        type=int,
+                        default=50,
+                        help='number of cluster for geographic info')
     parser.add_argument('--lon_parts',
                         type=int,
                         default=128,
