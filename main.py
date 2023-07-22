@@ -5,6 +5,7 @@ import pickle
 import zipfile
 import logging
 import collections
+from sklearn.cluster import KMeans
 
 from model import *
 from utils import *
@@ -12,7 +13,7 @@ from config import *
 from dataset import *
 
 SSTBatch = collections.namedtuple(
-    "SSTBatch", ["graph", "user", "features", "time", "label", "mask"]
+    "SSTBatch", ["graph", "user", "features", "time", "label", "mask", "type"]
 )
 
 
@@ -118,60 +119,32 @@ if __name__ == '__main__':
         # val_df = process_for_GowallaCA(val_df)
         test_df = process_for_GowallaCA(test_df)
 
-    # POI id to index
-    POI_list = list(set(train_df['POI_id'].tolist()))
-    POI_id2idx_dict = dict(zip(POI_list, range(len(POI_list))))
-    fuse_len = len(POI_id2idx_dict)
     # User id to index
     uid_list = [str(uid) for uid in list(set(train_df['user_id'].to_list()))]
     user_id2idx_dict = dict(zip(uid_list, range(len(uid_list))))
-    fuse_len = fuse_len + len(user_id2idx_dict)
+    # POI id to index
+    POI_list = list(set(train_df['POI_id'].tolist()))
+    POI_list.sort()
+    POI_id2idx_dict = dict(zip(POI_list, range(len(POI_list))))
+    fuse_len = len(POI_id2idx_dict)
     # Cat id to index
-    cat_ids = list(set(train_df['POI_catid'].tolist()))
-    cat_id2idx_dict = dict(zip(cat_ids, range(fuse_len, fuse_len + len(cat_ids))))
+    cat_list = list(set(train_df['POI_catid'].tolist()))
+    cat_list.sort()
+    cat_id2idx_dict = dict(zip(cat_list, range(fuse_len, fuse_len + len(cat_list))))
     fuse_len = fuse_len + len(cat_id2idx_dict)
+
+    data_train = np.column_stack((train_df['longitude'], train_df['latitude']))
+    kmeans_train = KMeans(n_clusters=args.K_cluster)
+    kmeans_train.fit(data_train)
+    train_df['coo_label'] = kmeans_train.labels_ + fuse_len
+    data_test = np.column_stack((test_df['longitude'], test_df['latitude']))
+    test_df['coo_label'] = kmeans_train.predict(data_test) + fuse_len
+    fuse_len = fuse_len + args.K_cluster
 
     num_users = len(user_id2idx_dict)
     num_POIs = len(POI_id2idx_dict)
     num_cats = len(cat_id2idx_dict)
-    print(f"users: {num_users}, POIs: {num_POIs}, cats: {num_cats}")
-
-    n_clusters = args.lon_parts * args.lat_parts
-    max_lon, min_lon = train_df.loc[:, "longitude"].max() + 1, train_df.loc[:, "longitude"].min() - 1
-    max_lat, min_lat = train_df.loc[:, "latitude"].max() + 1, train_df.loc[:, "latitude"].min() - 1
-    column = (max_lon - min_lon) / args.lon_parts
-    row = (max_lat - min_lat) / args.lat_parts
-
-
-    def gen_coo_ID(lon, lat):
-        if lon <= min_lon or lon >= max_lon or lat <= min_lat or lat >= max_lat:
-            return -1
-        return int((lon - min_lon) / column) + 1 + int((lat - min_lat) / row) * args.lon_parts + fuse_len
-
-
-    train_df['coo_label'] = train_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
-    # val_df['coo_label'] = val_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
-    test_df['coo_label'] = test_df.apply(lambda x: gen_coo_ID(x['longitude'], x['latitude']), axis=1)
-    fuse_len = fuse_len + args.lon_parts * args.lat_parts
-
-    POI2user_dict = train_df.groupby('POI_id')['user_id'].apply(set).to_dict()
-    POI2cat_dict = train_df.groupby('POI_id')['POI_catid'].apply(set).to_dict()
-    POI2coo_dict = train_df.groupby('POI_id')['coo_label'].apply(set).to_dict()
-    POI_id2user_id_dict, POI_id2cat_id_dict, POI_id2coo_id_dict = {}, {}, {}
-    for key in POI2user_dict.keys():
-        POI_id2user_id_dict[POI_id2idx_dict[key]] = user_id2idx_dict[str(list(POI2user_dict[key])[0])]
-    for key in POI2cat_dict.keys():
-        POI_id2cat_id_dict[POI_id2idx_dict[key]] = cat_id2idx_dict[list(POI2cat_dict[key])[0]]
-    for key in POI2coo_dict.keys():
-        POI_id2coo_id_dict[POI_id2idx_dict[key]] = list(POI2coo_dict[key])[0]
-
-    candidate_tail, candidate_cat, candidate_coo = [], [], []
-    for i in range(num_POIs):
-        candidate_tail.append(i)
-        candidate_cat.append(POI_id2cat_id_dict[i])
-        candidate_coo.append(POI_id2coo_id_dict[i])
-    candidate_tail, candidate_cat, candidate_coo = torch.tensor(candidate_tail).to(args.device), torch.tensor(
-        candidate_cat).to(args.device), torch.tensor(candidate_coo).to(args.device)
+    print(f"users: {num_users}, POIs: {num_POIs}, cats: {num_cats}, coos: {args.K_cluster}")
 
     # Build dataset
     map_set = (user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict)
@@ -183,7 +156,7 @@ if __name__ == '__main__':
                                   pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
     # val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False,
     #                             pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
-    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False,
+    test_dataloader = DataLoader(test_dataset, batch_size=128, shuffle=False, drop_last=False,
                                  pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
 
     # ==================================================================================================
@@ -193,19 +166,17 @@ if __name__ == '__main__':
 
     TreeLSTM_model = TreeLSTM(h_size=args.h_size,
                               embed_dropout=args.embed_dropout, model_dropout=args.model_dropout,
-                              num_users=num_users, user_embed_dim=args.user_embed_dim,
-                              num_POIs=num_POIs, POI_embed_dim=args.POI_embed_dim,
-                              num_cats=num_cats, cat_embed_dim=args.cat_embed_dim,
-                              time_embed_dim=args.time_embed_dim,
-                              num_coos=n_clusters, coo_embed_dim=args.coo_embed_dim,
-                              nary=args.nary + 3, device=args.device).to(device=args.device)
-    KG_model = KnowledgeGraph(args.h_size, fuse_len, args.POI_embed_dim, num_POIs).to(device=args.device)
+                              num_users=num_users, num_POIs=num_POIs, num_cats=num_cats, num_coos=args.K_cluster,
+                              user_embed_dim=args.user_embed_dim, fuse_embed_dim=args.fuse_embed_dim,
+                              nary=args.nary + 2, device=args.device).to(device=args.device)
+    multi_task_loss = MultiTaskLoss(3).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)
     criterion_coo = nn.CrossEntropyLoss(ignore_index=-1)
-    criterion_KG = MarginLoss(margin=8.0).to(device=args.device)
-    optimizer = torch.optim.Adam(params=list(TreeLSTM_model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.Adam(params=list(TreeLSTM_model.parameters())
+                                        + list(multi_task_loss.parameters()),
+                                 lr=args.lr, weight_decay=args.weight_decay)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_gamma)
 
     # ==================================================================================================
@@ -215,6 +186,7 @@ if __name__ == '__main__':
         print('\nLoad pre-trained model...')
         checkpoint = torch.load(os.path.join(args.load_path, f"checkpoint_50.pth"))
         TreeLSTM_model.load_state_dict(checkpoint['model_state'])
+        multi_task_loss.load_state_dict(checkpoint['multi_task_loss_state'])
         optimizer.load_state_dict(checkpoint['optimizer_state'])
         lr_scheduler.load_state_dict(checkpoint['lr_scheduler_state'])
 
@@ -230,16 +202,16 @@ if __name__ == '__main__':
         TreeLSTM_model.train()
         TreeLSTM_model.cell.train()
         TreeLSTM_model.cell_o.train()
-        KG_model.train()
+        multi_task_loss.train()
 
         loss_list = []
 
         for b_idx, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc="Training"):
             in_tree_batcher, out_tree_batcher = [], []
             for trajectory in batch:
-                traj_in_tree = construct_heterogeneous(trajectory, args.nary, args.plot_tree, 'in')
+                traj_in_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'in')
                 in_tree_batcher.append(traj_in_tree.to(args.device))
-                traj_out_tree = construct_heterogeneous(trajectory, args.nary, args.plot_tree, 'out')
+                traj_out_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'out')
                 out_tree_batcher.append(traj_out_tree.to(args.device))
 
             in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
@@ -248,16 +220,18 @@ if __name__ == '__main__':
                                 features=in_tree_batch.ndata["x"].to(args.device),
                                 time=in_tree_batch.ndata["time"].to(args.device),
                                 label=in_tree_batch.ndata["y"].to(args.device),
-                                mask=in_tree_batch.ndata["mask"].to(args.device))
+                                mask=in_tree_batch.ndata["mask"].to(args.device),
+                                type=in_tree_batch.ndata["type"].to(args.device))
             out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
             out_trees = SSTBatch(graph=out_tree_batch,
                                  user=out_tree_batch.ndata["u"].to(args.device),
                                  features=out_tree_batch.ndata["x"].to(args.device),
                                  time=out_tree_batch.ndata["time"].to(args.device),
                                  label=out_tree_batch.ndata["y"].to(args.device),
-                                 mask=out_tree_batch.ndata["mask"].to(args.device))
+                                 mask=out_tree_batch.ndata["mask"].to(args.device),
+                                 type=out_tree_batch.ndata["type"].to(args.device))
 
-            y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o = \
+            y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
                 TreeLSTM_model(in_trees, out_trees)
 
             y_POI, y_cat, y_tim, y_coo = \
@@ -265,17 +239,10 @@ if __name__ == '__main__':
             y_POI_o, y_cat_o, y_tim_o, y_coo_o = \
                 out_trees.label[:, 0], out_trees.label[:, 1], out_trees.label[:, 2], out_trees.label[:, 3]
 
-            y_POI_emb, y_cat_emb, y_coo_emb = TreeLSTM_model.get_embedding(y_POI, y_cat, y_coo)
-            pos_score = KG_model(h, y_POI_emb, (y_cat_emb, y_coo_emb))
-            shuffled_indices = torch.randperm(len(y_POI_emb))
-            neg_score = KG_model(h, y_POI_emb[shuffled_indices],
-                                 (y_cat_emb[shuffled_indices], y_coo_emb[shuffled_indices]))
-            loss_KG = criterion_KG(pos_score, neg_score)
-
             loss_POI = criterion_POI(y_pred_POI, y_POI.long()) + criterion_POI(y_pred_POI_o, y_POI_o.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long()) + criterion_cat(y_pred_cat_o, y_cat_o.long())
             loss_coo = criterion_coo(y_pred_coo, y_coo.long()) + criterion_coo(y_pred_coo_o, y_coo_o.long())
-            loss = loss_POI + loss_cat + loss_coo + loss_KG * 5
+            loss = multi_task_loss(loss_POI, loss_cat, loss_coo)
             loss_list.append(loss.item())
             loss.backward()
 
@@ -291,9 +258,10 @@ if __name__ == '__main__':
         logging.info(f"Current epoch's mean loss: {np.mean(loss_list)}\t\tlr: {optimizer.param_groups[0]['lr']}")
 
         # Save model
-        if (epoch + 1) % 600 == 0:
+        if (epoch + 1) % 5 == 0 and epoch >= 80:
             checkpoint = {
                 'model_state': TreeLSTM_model.state_dict(),
+                'multi_task_loss_state': multi_task_loss.state_dict(),
                 'optimizer_state': optimizer.state_dict(),
                 'lr_scheduler_state': lr_scheduler.state_dict()
             }
@@ -306,20 +274,22 @@ if __name__ == '__main__':
         TreeLSTM_model.eval()
         TreeLSTM_model.cell.eval()
         TreeLSTM_model.cell_o.eval()
-        KG_model.eval()
+        multi_task_loss.eval()
 
         with torch.no_grad():
             y_pred_POI_list, y_label_POI_list = [], []
-            y_KG_POI_list = []
             y_pred_cat_list, y_label_cat_list = [], []
             y_pred_coo_list, y_label_coo_list = [], []
+            y_pred_POI_list_0, y_label_POI_list_0 = [], []
+            y_pred_POI_list_1, y_label_POI_list_1 = [], []
+            y_pred_POI_list_2, y_label_POI_list_2 = [], []
             # Start testing
             for batch in test_dataloader:
                 in_tree_batcher, out_tree_batcher = [], []
                 for trajectory in batch:
-                    traj_in_tree = construct_heterogeneous(trajectory, args.nary, args.plot_tree, 'in')
+                    traj_in_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'in')
                     in_tree_batcher.append(traj_in_tree.to(args.device))
-                    traj_out_tree = construct_heterogeneous(trajectory, args.nary, args.plot_tree, 'out')
+                    traj_out_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'out')
                     out_tree_batcher.append(traj_out_tree.to(args.device))
 
                 in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
@@ -328,44 +298,65 @@ if __name__ == '__main__':
                                     features=in_tree_batch.ndata["x"].to(args.device),
                                     time=in_tree_batch.ndata["time"].to(args.device),
                                     label=in_tree_batch.ndata["y"].to(args.device),
-                                    mask=in_tree_batch.ndata["mask"].to(args.device))
+                                    mask=in_tree_batch.ndata["mask"].to(args.device),
+                                    type=in_tree_batch.ndata["type"].to(args.device))
                 out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
                 out_trees = SSTBatch(graph=out_tree_batch,
                                      user=out_tree_batch.ndata["u"].to(args.device),
                                      features=out_tree_batch.ndata["x"].to(args.device),
                                      time=out_tree_batch.ndata["time"].to(args.device),
                                      label=out_tree_batch.ndata["y"].to(args.device),
-                                     mask=out_tree_batch.ndata["mask"].to(args.device))
+                                     mask=out_tree_batch.ndata["mask"].to(args.device),
+                                     type=out_tree_batch.ndata["type"].to(args.device))
 
-                y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_o = \
+                y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
                     TreeLSTM_model(in_trees, out_trees)
-                y_POI_emb, y_cat_emb, y_coo_emb = TreeLSTM_model.get_embedding(candidate_tail, candidate_cat,
-                                                                               candidate_coo)
-                KG_recommendation_list = KG_model.predict(h, y_POI_emb, (y_cat_emb, y_coo_emb))
 
                 y_POI, y_cat, y_tim, y_coo = \
                     in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2], in_trees.label[:, 3]
 
-                y_pred_POI_all = y_pred_POI + y_pred_POI_o + KG_recommendation_list * -0.3
+                y_pred_POI_all = y_pred_POI + y_pred_POI_o
                 y_pred_cat_all = y_pred_cat + y_pred_cat_o
                 y_pred_coo_all = y_pred_coo + y_pred_coo_o
+
+                indices_0 = torch.where(in_trees.type == 0)[0]
+                indices_1 = torch.where(in_trees.type == 1)[0]
+                indices_2 = torch.where(in_trees.type == 2)[0]
+                y_pred_POI_0, y_POI_0 = y_pred_POI_all[indices_0], y_POI[indices_0]
+                y_pred_POI_1, y_POI_1 = y_pred_POI_all[indices_1], y_POI[indices_1]
+                y_pred_POI_2, y_POI_2 = y_pred_POI_all[indices_2], y_POI[indices_2]
+
+                y_pred_POI_list_0.append(y_pred_POI_0.detach().cpu().numpy())
+                y_label_POI_list_0.append(y_POI_0.detach().cpu().numpy())
+                y_pred_POI_list_1.append(y_pred_POI_1.detach().cpu().numpy())
+                y_label_POI_list_1.append(y_POI_1.detach().cpu().numpy())
+                y_pred_POI_list_2.append(y_pred_POI_2.detach().cpu().numpy())
+                y_label_POI_list_2.append(y_POI_2.detach().cpu().numpy())
+
                 y_pred_POI_list.append(y_pred_POI_all.detach().cpu().numpy())
-                y_KG_POI_list.append(KG_recommendation_list.detach().cpu().numpy())
                 y_label_POI_list.append(y_POI.detach().cpu().numpy())
                 y_pred_cat_list.append(y_pred_cat_all.detach().cpu().numpy())
                 y_label_cat_list.append(y_cat.detach().cpu().numpy())
                 y_pred_coo_list.append(y_pred_coo_all.detach().cpu().numpy())
                 y_label_coo_list.append(y_coo.detach().cpu().numpy())
 
-            y_label_POI_numpy, y_pred_POI_numpy = get_pred_label(y_label_POI_list, y_pred_POI_list)
-            y_KG_POI_numpy = np.concatenate(y_KG_POI_list, axis=0)
+            y_label_POI_numpy_0, y_pred_POI_numpy_0 = get_pred_label(y_label_POI_list_0, y_pred_POI_list_0)
+            y_label_POI_numpy_1, y_pred_POI_numpy_1 = get_pred_label(y_label_POI_list_1, y_pred_POI_list_1)
+            y_label_POI_numpy_2, y_pred_POI_numpy_2 = get_pred_label(y_label_POI_list_2, y_pred_POI_list_2)
+
+            y_label_POI_numpy, y_pred_POI_numpy = get_pred_label(y_label_POI_list_0, y_pred_POI_list_0)
             y_label_cat_numpy, y_pred_cat_numpy = get_pred_label(y_label_cat_list, y_pred_cat_list)
             y_label_coo_numpy, y_pred_coo_numpy = get_pred_label(y_label_coo_list, y_pred_coo_list)
 
-            # if (epoch + 1) % 5 == 0 and epoch >= 30:
-            #     pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
-            #     pickle.dump(y_KG_POI_numpy, open(os.path.join(save_dir, f"KG_list_{epoch + 1}"), 'wb'))
-            #     pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
+            if epoch >= 80:
+                pickle.dump(y_pred_POI_numpy_0, open(os.path.join(save_dir, f"recommend_list_POI_{epoch + 1}"), 'wb'))
+                pickle.dump(y_pred_POI_numpy_1, open(os.path.join(save_dir, f"recommend_list_cat_{epoch + 1}"), 'wb'))
+                pickle.dump(y_pred_POI_numpy_2, open(os.path.join(save_dir, f"recommend_list_coo_{epoch + 1}"), 'wb'))
+                pickle.dump(y_label_POI_numpy_0, open(os.path.join(save_dir, f"ground_truth_POI_{epoch + 1}"), 'wb'))
+                pickle.dump(y_label_POI_numpy_1, open(os.path.join(save_dir, f"ground_truth_cat_{epoch + 1}"), 'wb'))
+                pickle.dump(y_label_POI_numpy_2, open(os.path.join(save_dir, f"ground_truth_coo_{epoch + 1}"), 'wb'))
+                pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
+                pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
 
             # Logging
             logging.info(f"================================ Testing ================================")
