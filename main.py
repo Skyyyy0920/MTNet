@@ -126,20 +126,17 @@ if __name__ == '__main__':
     POI_list = list(set(train_df['POI_id'].tolist()))
     POI_list.sort()
     POI_id2idx_dict = dict(zip(POI_list, range(len(POI_list))))
-    fuse_len = len(POI_id2idx_dict)
     # Cat id to index
     cat_list = list(set(train_df['POI_catid'].tolist()))
     cat_list.sort()
-    cat_id2idx_dict = dict(zip(cat_list, range(fuse_len, fuse_len + len(cat_list))))
-    fuse_len = fuse_len + len(cat_id2idx_dict)
+    cat_id2idx_dict = dict(zip(cat_list, range(len(cat_list))))
 
     data_train = np.column_stack((train_df['longitude'], train_df['latitude']))
     kmeans_train = KMeans(n_clusters=args.K_cluster)
     kmeans_train.fit(data_train)
-    train_df['coo_label'] = kmeans_train.labels_ + fuse_len
+    train_df['coo_label'] = kmeans_train.labels_
     data_test = np.column_stack((test_df['longitude'], test_df['latitude']))
-    test_df['coo_label'] = kmeans_train.predict(data_test) + fuse_len
-    fuse_len = fuse_len + args.K_cluster
+    test_df['coo_label'] = kmeans_train.predict(data_test)
 
     num_users = len(user_id2idx_dict)
     num_POIs = len(POI_id2idx_dict)
@@ -168,7 +165,7 @@ if __name__ == '__main__':
                               embed_dropout=args.embed_dropout, model_dropout=args.model_dropout,
                               num_users=num_users, num_POIs=num_POIs, num_cats=num_cats, num_coos=args.K_cluster,
                               user_embed_dim=args.user_embed_dim, fuse_embed_dim=args.fuse_embed_dim,
-                              nary=args.nary + 2, device=args.device).to(device=args.device)
+                              nary=args.nary, device=args.device).to(device=args.device)
     multi_task_loss = MultiTaskLoss(3).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
@@ -234,10 +231,8 @@ if __name__ == '__main__':
             y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
                 TreeLSTM_model(in_trees, out_trees)
 
-            y_POI, y_cat, y_tim, y_coo = \
-                in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2], in_trees.label[:, 3]
-            y_POI_o, y_cat_o, y_tim_o, y_coo_o = \
-                out_trees.label[:, 0], out_trees.label[:, 1], out_trees.label[:, 2], out_trees.label[:, 3]
+            y_POI, y_cat, y_coo = in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2]
+            y_POI_o, y_cat_o, y_coo_o = out_trees.label[:, 0], out_trees.label[:, 1], out_trees.label[:, 2]
 
             loss_POI = criterion_POI(y_pred_POI, y_POI.long()) + criterion_POI(y_pred_POI_o, y_POI_o.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long()) + criterion_cat(y_pred_cat_o, y_cat_o.long())
@@ -312,8 +307,7 @@ if __name__ == '__main__':
                 y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
                     TreeLSTM_model(in_trees, out_trees)
 
-                y_POI, y_cat, y_tim, y_coo = \
-                    in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2], in_trees.label[:, 3]
+                y_POI, y_cat, y_coo = in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2]
 
                 y_pred_POI_all = y_pred_POI + y_pred_POI_o
                 y_pred_cat_all = y_pred_cat + y_pred_cat_o

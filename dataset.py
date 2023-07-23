@@ -6,7 +6,6 @@ from torch.utils.data import Dataset, DataLoader
 class TrajectoryTrainDataset(Dataset):
     def __init__(self, data_df, map_set):
         user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict = map_set
-        fuse_len = len(POI_id2idx_dict) + len(cat_id2idx_dict) + 32 * 32
         self.trajectories = {}
 
         data_df = data_df.groupby(['trajectory_id']).filter(lambda x: len(x) > 2)
@@ -26,8 +25,7 @@ class TrajectoryTrainDataset(Dataset):
                 POI_idx, cat_idx = POI_id2idx_dict[pid], cat_id2idx_dict[cid]
                 next_POI_idx, next_cat_idx = POI_id2idx_dict[next_pid], cat_id2idx_dict[next_cid]
                 features = [user_idx, POI_idx, cat_idx, coo]
-                labels = [next_POI_idx, next_cat_idx - len(POI_id2idx_dict), fuse_len + next_tim.hour,
-                          next_coo - len(POI_id2idx_dict) - len(cat_id2idx_dict)]
+                labels = [next_POI_idx, next_cat_idx, next_coo]
                 tim_info = int((tim - start_date).days * 24 + (tim - start_date).seconds / 60 / 60)
                 checkin = {'features': features, 'time': tim_info, 'labels': labels}
                 self.trajectories[traj_idx].append(checkin)
@@ -109,10 +107,9 @@ class TrajectoryTestDataset(Dataset):
                 next_POI_idx, next_cat_idx = POI_id2idx_dict[next_pid], cat_id2idx_dict[next_cid]
                 features = [user_idx, POI_idx, cat_idx, coo]
                 if index == len(trajectory) - 2:
-                    labels = [next_POI_idx, next_cat_idx - len(POI_id2idx_dict), fuse_len + next_tim.hour,
-                              next_coo - len(POI_id2idx_dict) - len(cat_id2idx_dict)]
+                    labels = [next_POI_idx, next_cat_idx, next_coo]
                 else:
-                    labels = [-1, -1, -1, -1]
+                    labels = [-1, -1, -1]
                 tim_info = int((tim - start_date).days * 24 + (tim - start_date).seconds / 60 / 60)
                 checkin = {'features': features, 'time': tim_info, 'labels': labels}
                 self.trajectories[traj_idx].append(checkin)

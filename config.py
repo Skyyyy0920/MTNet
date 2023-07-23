@@ -29,11 +29,11 @@ def get_args():
     # Model hyper-parameters
     parser.add_argument('--nary',
                         type=int,
-                        default=1,
+                        default=3,
                         help='n-ary tree')
     parser.add_argument('--user_embed_dim',
                         type=int,
-                        default=128,
+                        default=64,
                         help='User embedding dimensions')
     parser.add_argument('--fuse_embed_dim',
                         type=int,
@@ -59,7 +59,7 @@ def get_args():
     # Training hyper-parameters
     parser.add_argument('--batch_size',
                         type=int,
-                        default=2048,
+                        default=1024,
                         help='Batch size')  # 1024
     parser.add_argument('--accumulation_steps',
                         type=int,
@@ -75,7 +75,7 @@ def get_args():
                         help='Initial learning rate')
     parser.add_argument('--lr_step_size',
                         type=int,
-                        default=4,
+                        default=6,
                         help='Learning rate scheduler factor')
     parser.add_argument('--lr_gamma',
                         type=float,
