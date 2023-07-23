@@ -41,7 +41,7 @@ def get_args():
                         help='POI embedding dimensions')
     parser.add_argument('--K_cluster',
                         type=int,
-                        default=50,
+                        default=60,
                         help='number of cluster for geographic info')
     parser.add_argument('--embed_dropout',
                         type=float,
@@ -63,7 +63,7 @@ def get_args():
                         help='Batch size')  # 1024
     parser.add_argument('--accumulation_steps',
                         type=int,
-                        default=8,
+                        default=16,
                         help='Gradient accumulation to solve the GPU memory problem')
     parser.add_argument('--epochs',
                         type=int,
@@ -75,7 +75,7 @@ def get_args():
                         help='Initial learning rate')
     parser.add_argument('--lr_step_size',
                         type=int,
-                        default=6,
+                        default=8,
                         help='Learning rate scheduler factor')
     parser.add_argument('--lr_gamma',
                         type=float,
@@ -83,7 +83,7 @@ def get_args():
                         help='Learning rate scheduler factor')
     parser.add_argument('--weight_decay',
                         type=float,
-                        default=5e-4,
+                        default=1e-4,
                         help='Weight decay (L2 loss on parameters)')
 
     # Experiment configuration

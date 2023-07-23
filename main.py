@@ -139,7 +139,6 @@ if __name__ == '__main__':
     train_df['coo_label'] = kmeans_train.labels_ + fuse_len
     data_test = np.column_stack((test_df['longitude'], test_df['latitude']))
     test_df['coo_label'] = kmeans_train.predict(data_test) + fuse_len
-    fuse_len = fuse_len + args.K_cluster
 
     num_users = len(user_id2idx_dict)
     num_POIs = len(POI_id2idx_dict)
@@ -234,10 +233,8 @@ if __name__ == '__main__':
             y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
                 TreeLSTM_model(in_trees, out_trees)
 
-            y_POI, y_cat, y_tim, y_coo = \
-                in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2], in_trees.label[:, 3]
-            y_POI_o, y_cat_o, y_tim_o, y_coo_o = \
-                out_trees.label[:, 0], out_trees.label[:, 1], out_trees.label[:, 2], out_trees.label[:, 3]
+            y_POI, y_cat, y_coo = in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2]
+            y_POI_o, y_cat_o, y_coo_o = out_trees.label[:, 0], out_trees.label[:, 1], out_trees.label[:, 2]
 
             loss_POI = criterion_POI(y_pred_POI, y_POI.long()) + criterion_POI(y_pred_POI_o, y_POI_o.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long()) + criterion_cat(y_pred_cat_o, y_cat_o.long())
@@ -312,9 +309,10 @@ if __name__ == '__main__':
                 y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
                     TreeLSTM_model(in_trees, out_trees)
 
-                y_POI, y_cat, y_tim, y_coo = \
-                    in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2], in_trees.label[:, 3]
+                y_POI, y_cat, y_coo = in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2]
 
+                # alpha = 0.5
+                # y_pred_POI_all = alpha * y_pred_POI + (1 - alpha) * y_pred_POI_o
                 y_pred_POI_all = y_pred_POI + y_pred_POI_o
                 y_pred_cat_all = y_pred_cat + y_pred_cat_o
                 y_pred_coo_all = y_pred_coo + y_pred_coo_o
