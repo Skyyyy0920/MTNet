@@ -29,7 +29,7 @@ def get_args():
     # Model hyper-parameters
     parser.add_argument('--nary',
                         type=int,
-                        default=1,
+                        default=3,
                         help='n-ary tree')
     parser.add_argument('--user_embed_dim',
                         type=int,
@@ -75,7 +75,7 @@ def get_args():
                         help='Initial learning rate')
     parser.add_argument('--lr_step_size',
                         type=int,
-                        default=5,
+                        default=6,
                         help='Learning rate scheduler factor')
     parser.add_argument('--lr_gamma',
                         type=float,
