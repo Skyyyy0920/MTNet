@@ -154,7 +154,7 @@ if __name__ == '__main__':
                               embed_dropout=args.embed_dropout, model_dropout=args.model_dropout,
                               num_users=num_users, num_POIs=num_POIs, num_cats=num_cats, num_coos=args.K_cluster,
                               user_embed_dim=args.user_embed_dim, fuse_embed_dim=args.fuse_embed_dim,
-                              nary=args.nary + 2, device=args.device).to(device=args.device)
+                              nary=args.nary + 3, device=args.device).to(device=args.device)
     multi_task_loss = MultiTaskLoss(3).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
@@ -195,9 +195,11 @@ if __name__ == '__main__':
         for b_idx, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc="Training"):
             in_tree_batcher, out_tree_batcher = [], []
             for trajectory in batch:
-                traj_in_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'in')
+                traj_in_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'in',
+                                                      fuse_len + args.K_cluster)
                 in_tree_batcher.append(traj_in_tree.to(args.device))
-                traj_out_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'out')
+                traj_out_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'out',
+                                                       fuse_len + args.K_cluster)
                 out_tree_batcher.append(traj_out_tree.to(args.device))
 
             in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
@@ -217,8 +219,11 @@ if __name__ == '__main__':
                                  mask=out_tree_batch.ndata["mask"].to(args.device),
                                  type=out_tree_batch.ndata["type"].to(args.device))
 
-            y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
+            y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_ = \
                 TreeLSTM_model(in_trees, out_trees)
+
+            indices = torch.any(h_ != 0, dim=1)
+            h, h_ = h[indices], h_[indices]
 
             y_POI, y_cat, y_coo = in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2]
             y_POI_o, y_cat_o, y_coo_o = out_trees.label[:, 0], out_trees.label[:, 1], out_trees.label[:, 2]
@@ -226,7 +231,7 @@ if __name__ == '__main__':
             loss_POI = criterion_POI(y_pred_POI, y_POI.long()) + criterion_POI(y_pred_POI_o, y_POI_o.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long()) + criterion_cat(y_pred_cat_o, y_cat_o.long())
             loss_coo = criterion_coo(y_pred_coo, y_coo.long()) + criterion_coo(y_pred_coo_o, y_coo_o.long())
-            loss = multi_task_loss(loss_POI, loss_cat, loss_coo)
+            loss = multi_task_loss(loss_POI, loss_cat, loss_coo) + SSL(h, h_) * 0.2
             loss_list.append(loss.item())
             loss.backward()
 
@@ -267,13 +272,16 @@ if __name__ == '__main__':
             y_pred_POI_list_0, y_label_POI_list_0 = [], []
             y_pred_POI_list_1, y_label_POI_list_1 = [], []
             y_pred_POI_list_2, y_label_POI_list_2 = [], []
+            y_pred_POI_list_3, y_label_POI_list_3 = [], []
             # Start testing
             for batch in test_dataloader:
                 in_tree_batcher, out_tree_batcher = [], []
                 for trajectory in batch:
-                    traj_in_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'in')
+                    traj_in_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'in',
+                                                          fuse_len + args.K_cluster)
                     in_tree_batcher.append(traj_in_tree.to(args.device))
-                    traj_out_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'out')
+                    traj_out_tree = construct_MobilityTree(trajectory, args.nary, args.plot_tree, 'out',
+                                                           fuse_len + args.K_cluster)
                     out_tree_batcher.append(traj_out_tree.to(args.device))
 
                 in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
@@ -293,7 +301,7 @@ if __name__ == '__main__':
                                      mask=out_tree_batch.ndata["mask"].to(args.device),
                                      type=out_tree_batch.ndata["type"].to(args.device))
 
-                y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
+                y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_ = \
                     TreeLSTM_model(in_trees, out_trees)
 
                 y_POI, y_cat, y_coo = in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2]
@@ -307,9 +315,13 @@ if __name__ == '__main__':
                 indices_0 = torch.where(in_trees.type == 0)[0]
                 indices_1 = torch.where(in_trees.type == 1)[0]
                 indices_2 = torch.where(in_trees.type == 2)[0]
+                indices_3 = torch.where(in_trees.type == 3)[0]
+                # indices_5 = torch.where(in_trees.type == 5)[0]
                 y_pred_POI_0, y_POI_0 = y_pred_POI_all[indices_0], y_POI[indices_0]
                 y_pred_POI_1, y_POI_1 = y_pred_POI_all[indices_1], y_POI[indices_1]
                 y_pred_POI_2, y_POI_2 = y_pred_POI_all[indices_2], y_POI[indices_2]
+                y_pred_POI_3, y_POI_3 = y_pred_POI_all[indices_3], y_POI[indices_3]
+                # y_pred_POI_5, y_POI_5 = y_pred_POI_all[indices_5], y_POI[indices_5]
 
                 y_pred_POI_list_0.append(y_pred_POI_0.detach().cpu().numpy())
                 y_label_POI_list_0.append(y_POI_0.detach().cpu().numpy())
@@ -317,6 +329,8 @@ if __name__ == '__main__':
                 y_label_POI_list_1.append(y_POI_1.detach().cpu().numpy())
                 y_pred_POI_list_2.append(y_pred_POI_2.detach().cpu().numpy())
                 y_label_POI_list_2.append(y_POI_2.detach().cpu().numpy())
+                y_pred_POI_list_3.append(y_pred_POI_3.detach().cpu().numpy())
+                y_label_POI_list_3.append(y_POI_3.detach().cpu().numpy())
 
                 y_pred_POI_list.append(y_pred_POI_all.detach().cpu().numpy())
                 y_label_POI_list.append(y_POI.detach().cpu().numpy())
@@ -328,6 +342,7 @@ if __name__ == '__main__':
             y_label_POI_numpy_0, y_pred_POI_numpy_0 = get_pred_label(y_label_POI_list_0, y_pred_POI_list_0)
             y_label_POI_numpy_1, y_pred_POI_numpy_1 = get_pred_label(y_label_POI_list_1, y_pred_POI_list_1)
             y_label_POI_numpy_2, y_pred_POI_numpy_2 = get_pred_label(y_label_POI_list_2, y_pred_POI_list_2)
+            y_label_POI_numpy_3, y_pred_POI_numpy_3 = get_pred_label(y_label_POI_list_3, y_pred_POI_list_3)
 
             y_label_POI_numpy, y_pred_POI_numpy = get_pred_label(y_label_POI_list_0, y_pred_POI_list_0)
             y_label_cat_numpy, y_pred_cat_numpy = get_pred_label(y_label_cat_list, y_pred_cat_list)

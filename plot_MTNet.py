@@ -27,8 +27,12 @@ def add_children(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
     """
     node = trajectory[index]
     idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
-                  y=node['labels'], mask=1, type=0)  # add parent node
+    if index > 0:
+        tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
+                      y=node['labels'], mask=1, type=0)  # add parent node
+    else:
+        tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
+                      y=node['labels'], mask=1, type=5)  # add parent node
 
     if index > 0 and flag_dict[index] > 0:
         flag_dict[index] -= 1  # already play as parent node
@@ -42,6 +46,10 @@ def add_children(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
                               y=[-1] * 3, mask=0, type=-1)
                 tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
 
+        node_id = tree.number_of_nodes()
+        tree.add_node(node_id, u=node['features'][0], x=node['features'][1], time=node['time'],
+                      y=node['labels'], mask=1, type=3)  # add parent node
+        tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
         for i in range(1, 3):
             node_id = tree.number_of_nodes()
             tree.add_node(node_id, u=node['features'][0], x=node['features'][i + 1], time=node['time'],
@@ -56,8 +64,12 @@ def add_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
     max_index = re_index
     node = trajectory[re_index]
     idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
-                  y=node['labels'], mask=1, type=0)
+    if index > 0:
+        tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
+                      y=node['labels'], mask=1, type=0)
+    else:
+        tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
+                      y=node['labels'], mask=1, type=5)
 
     if index > 0 and flag_dict[index] > 0:
         flag_dict[index] -= 1  # already play as parent node
@@ -73,6 +85,10 @@ def add_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
                 max_index = child_idx if max_index < child_idx else max_index
                 tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
 
+        node_id = tree.number_of_nodes()
+        tree.add_node(node_id, u=node['features'][0], x=node['features'][1], time=node['time'],
+                      y=node['labels'], mask=1, type=3)
+        tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
         for i in range(1, 3):
             node_id = tree.number_of_nodes()
             tree.add_node(node_id, u=node['features'][0], x=node['features'][i + 1], time=node['time'],
@@ -88,7 +104,7 @@ def add_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
 def construct_MobilityTree(trajectory, nary, need_plot, tree_type):
     tree = nx.DiGraph()
     idx2idx_dict = {}
-    flag_dict = dict(zip(range(len(trajectory)), np.full(len(trajectory), 3)))
+    flag_dict = dict(zip(range(len(trajectory)), np.full(len(trajectory), 2)))
 
     start_index = len(trajectory) - 1
     if tree_type == 'in':  # in tree
@@ -104,7 +120,7 @@ def construct_MobilityTree(trajectory, nary, need_plot, tree_type):
 
 if __name__ == "__main__":
     trajectory = []
-    for i in range(15):
+    for i in range(8):
         checkin = {'features': [f'{i}_0', f'{i}_1', f'{i}_2', f'{i}_3'], 'time': f'{i}', 'labels': f'  {i}'}
         trajectory.append(checkin)
 

@@ -117,20 +117,24 @@ def plot_tree(g):
     plt.show()
 
 
-def add_children(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
+def add_children(tree, trajectory, index, idx2idx_dict, flag_dict, nary, length):
     """
     Using DFS to construct the tree for N-ary TreeLSTM
     """
     node = trajectory[index]
     idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
-                  y=node['labels'], mask=1, type=0)  # add parent node
+    if index > 0:
+        tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
+                      y=node['labels'], mask=1, type=0)  # add parent node
+    else:
+        tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1] + length, time=node['time'],
+                      y=node['labels'], mask=1, type=5)  # add parent node
 
     if index > 0 and flag_dict[index] > 0:
         flag_dict[index] -= 1  # already play as parent node
         for i in range(nary, 0, -1):
             if index - i >= 0:
-                add_children(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
+                add_children(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary, length)
                 tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
             else:  # fictitious node
                 node_id = tree.number_of_nodes()
@@ -138,6 +142,10 @@ def add_children(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
                               y=[-1] * 3, mask=0, type=-1)
                 tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
 
+        node_id = tree.number_of_nodes()
+        tree.add_node(node_id, u=node['features'][0], x=node['features'][1], time=node['time'],
+                      y=node['labels'], mask=1, type=3)  # add parent node
+        tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
         for i in range(1, 3):
             node_id = tree.number_of_nodes()
             tree.add_node(node_id, u=node['features'][0], x=node['features'][i + 1], time=node['time'],
@@ -147,13 +155,17 @@ def add_children(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
     return
 
 
-def add_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
+def add_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary, length):
     re_index = len(trajectory) - 1 - index
     max_index = re_index
     node = trajectory[re_index]
     idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
-                  y=node['labels'], mask=1, type=0)
+    if index > 0:
+        tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
+                      y=node['labels'], mask=1, type=0)
+    else:
+        tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1] + length, time=node['time'],
+                      y=node['labels'], mask=1, type=5)
 
     if index > 0 and flag_dict[index] > 0:
         flag_dict[index] -= 1  # already play as parent node
@@ -165,10 +177,14 @@ def add_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
                 tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
                 max_index = len(trajectory) - 1
             else:
-                child_idx = add_children_out(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
+                child_idx = add_children_out(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary, length)
                 max_index = child_idx if max_index < child_idx else max_index
                 tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
 
+        node_id = tree.number_of_nodes()
+        tree.add_node(node_id, u=node['features'][0], x=node['features'][1], time=node['time'],
+                      y=node['labels'], mask=1, type=3)
+        tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
         for i in range(1, 3):
             node_id = tree.number_of_nodes()
             tree.add_node(node_id, u=node['features'][0], x=node['features'][i + 1], time=node['time'],
@@ -178,19 +194,20 @@ def add_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
     # change node label
     tree.add_node(idx2idx_dict[index], u=node['features'][0], x=node['features'][1], time=node['time'],
                   y=trajectory[max_index]['labels'], mask=1, type=0)
+
     return max_index
 
 
-def construct_MobilityTree(trajectory, nary, need_plot, tree_type):
+def construct_MobilityTree(trajectory, nary, need_plot, tree_type, length):
     tree = nx.DiGraph()
     idx2idx_dict = {}
     flag_dict = dict(zip(range(len(trajectory)), np.full(len(trajectory), 2)))
 
     start_index = len(trajectory) - 1
     if tree_type == 'in':  # in tree
-        add_children(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
+        add_children(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary, length)
     elif tree_type == 'out':  # out tree
-        add_children_out(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
+        add_children_out(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary, length)
     else:
         print("Tree type wrong!")
 
@@ -199,3 +216,23 @@ def construct_MobilityTree(trajectory, nary, need_plot, tree_type):
 
     dgl_tree = dgl.from_networkx(tree, node_attrs=['u', 'x', 'time', 'y', 'mask', 'type'])
     return dgl_tree
+
+
+def SSL(p, p_):
+    def row_shuffle(embedding):
+        corrupted_embedding = embedding[torch.randperm(embedding.size()[0])]
+        return corrupted_embedding
+
+    def row_column_shuffle(embedding):
+        corrupted_embedding = embedding[torch.randperm(embedding.size()[0])]
+        corrupted_embedding = corrupted_embedding[:, torch.randperm(corrupted_embedding.size()[1])]
+        return corrupted_embedding
+
+    def score(x1, x2):
+        return torch.sum(torch.mul(x1, x2), 1)
+
+    pos = score(p, p_)
+    neg1 = score(p_, row_column_shuffle(p))
+    one = torch.cuda.FloatTensor(neg1.shape[0]).fill_(1)
+    con_loss = torch.sum(-torch.log(1e-8 + torch.sigmoid(pos)) - torch.log(1e-8 + (one - torch.sigmoid(neg1))))
+    return con_loss
