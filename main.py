@@ -1,28 +1,15 @@
 import yaml
 import time
-import random
 import pickle
 import zipfile
 import logging
-import collections
 from sklearn.cluster import KMeans
-
 from model import *
 from utils import *
 from config import *
 from dataset import *
 
-SSTBatch = collections.namedtuple(
-    "SSTBatch", ["graph", "user", "features", "time", "label", "mask", "type"]
-)
-
-
-def setup_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 if __name__ == '__main__':
     # ==================================================================================================
@@ -126,17 +113,19 @@ if __name__ == '__main__':
     POI_list = list(set(train_df['POI_id'].tolist()))
     POI_list.sort()
     POI_id2idx_dict = dict(zip(POI_list, range(len(POI_list))))
+    fuse_len = len(POI_id2idx_dict)
     # Cat id to index
     cat_list = list(set(train_df['POI_catid'].tolist()))
     cat_list.sort()
-    cat_id2idx_dict = dict(zip(cat_list, range(len(cat_list))))
+    cat_id2idx_dict = dict(zip(cat_list, range(fuse_len, fuse_len + len(cat_list))))
+    fuse_len = fuse_len + len(cat_id2idx_dict)
 
     data_train = np.column_stack((train_df['longitude'], train_df['latitude']))
     kmeans_train = KMeans(n_clusters=args.K_cluster)
     kmeans_train.fit(data_train)
-    train_df['coo_label'] = kmeans_train.labels_
+    train_df['coo_label'] = kmeans_train.labels_ + fuse_len
     data_test = np.column_stack((test_df['longitude'], test_df['latitude']))
-    test_df['coo_label'] = kmeans_train.predict(data_test)
+    test_df['coo_label'] = kmeans_train.predict(data_test) + fuse_len
 
     num_users = len(user_id2idx_dict)
     num_POIs = len(POI_id2idx_dict)
@@ -165,7 +154,7 @@ if __name__ == '__main__':
                               embed_dropout=args.embed_dropout, model_dropout=args.model_dropout,
                               num_users=num_users, num_POIs=num_POIs, num_cats=num_cats, num_coos=args.K_cluster,
                               user_embed_dim=args.user_embed_dim, fuse_embed_dim=args.fuse_embed_dim,
-                              nary=args.nary, device=args.device).to(device=args.device)
+                              nary=args.nary + 2, device=args.device).to(device=args.device)
     multi_task_loss = MultiTaskLoss(3).to(device=args.device)
 
     criterion_POI = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is ignored
@@ -309,6 +298,8 @@ if __name__ == '__main__':
 
                 y_POI, y_cat, y_coo = in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2]
 
+                # alpha = 0.5
+                # y_pred_POI_all = alpha * y_pred_POI + (1 - alpha) * y_pred_POI_o
                 y_pred_POI_all = y_pred_POI + y_pred_POI_o
                 y_pred_cat_all = y_pred_cat + y_pred_cat_o
                 y_pred_coo_all = y_pred_coo + y_pred_coo_o
