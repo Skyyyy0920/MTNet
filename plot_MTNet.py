@@ -108,5 +108,9 @@ if __name__ == "__main__":
         checkin = {'features': [f'{i}_0', f'{i}_1', f'{i}_2', f'{i}_3'], 'time': f'{i}', 'labels': f'  {i}'}
         trajectory.append(checkin)
 
-    construct_MobilityTree(trajectory, 3, True, 'in')
-    construct_MobilityTree(trajectory, 3, True, 'out')
+    # construct_MobilityTree(trajectory, 3, True, 'in')
+    # construct_MobilityTree(trajectory, 3, True, 'out')
+    construct_MobilityTree(trajectory, 1, True, 'in')
+    construct_MobilityTree(trajectory, 1, True, 'out')
+    # construct_MobilityTree(trajectory, 2, True, 'in')
+    # construct_MobilityTree(trajectory, 2, True, 'out')

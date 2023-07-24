@@ -1,28 +1,15 @@
 import yaml
 import time
-import random
 import pickle
 import zipfile
 import logging
-import collections
 from sklearn.cluster import KMeans
-
 from model import *
 from utils import *
 from config import *
 from dataset import *
 
-SSTBatch = collections.namedtuple(
-    "SSTBatch", ["graph", "user", "features", "time", "label", "mask", "type"]
-)
-
-
-def setup_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 if __name__ == '__main__':
     # ==================================================================================================

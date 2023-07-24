@@ -2,11 +2,25 @@ import os
 import re
 import dgl
 import glob
+import torch
+import random
+import collections
 import numpy as np
 import pandas as pd
 import networkx as nx
 from pathlib import Path
 import matplotlib.pyplot as plt
+
+SSTBatch = collections.namedtuple(
+    "SSTBatch", ["graph", "user", "features", "time", "label", "mask", "type"]
+)
+
+
+def setup_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 def zipdir(path, zipf, include_format):
@@ -170,7 +184,7 @@ def add_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
 def construct_MobilityTree(trajectory, nary, need_plot, tree_type):
     tree = nx.DiGraph()
     idx2idx_dict = {}
-    flag_dict = dict(zip(range(len(trajectory)), np.full(len(trajectory), 3)))
+    flag_dict = dict(zip(range(len(trajectory)), np.full(len(trajectory), 2)))
 
     start_index = len(trajectory) - 1
     if tree_type == 'in':  # in tree
