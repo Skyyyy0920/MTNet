@@ -9,8 +9,6 @@ from utils import *
 from config import *
 from dataset import *
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
 if __name__ == '__main__':
     # ==================================================================================================
     # 1. Get experiment args and seed

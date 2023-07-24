@@ -11,6 +11,8 @@ import networkx as nx
 from pathlib import Path
 import matplotlib.pyplot as plt
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 SSTBatch = collections.namedtuple(
     "SSTBatch", ["graph", "user", "features", "time", "label", "mask", "type"]
 )
