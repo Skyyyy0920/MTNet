@@ -24,43 +24,47 @@ class Cell(nn.Module):
         i, o, u = torch.sigmoid(i), torch.sigmoid(o), torch.tanh(u)
         c = i * u + nodes.data["c"]  # [batch, h_size]
         h = o * torch.tanh(c)
-        return {"h": h, "c": c, "p_": nodes.data["p_"]}
+        return {"h": h, "c": c}
 
     def message_func(self, edges):
         return {"h_child": edges.src["h"], "c_child": edges.src["c"], "type": edges.src["type"]}
 
     def reduce_func(self, nodes):
-        child_type = nodes.mailbox["type"]
         Wx = torch.cat([self.W_f(nodes.data["x"]) for _ in range(self.nary)], dim=1)
         b_f = torch.cat([self.b_f for _ in range(self.nary)], dim=1)
-        h_children = nodes.mailbox["h_child"]  # [batch, nary, h_size]
-        p_ = h_children[:, 1, :]
-        h_children = self.transformer_encoder(h_children)
-        h_children = h_children.view(h_children.size(0), -1)  # [batch, nary * h_size]
-        f = torch.sigmoid(Wx + h_children + b_f)
-        iou = self.W_iou(nodes.data["x"]) + self.U_iou(h_children) + self.b_iou  # [batch, 3 * h_size]
+        h_cat = nodes.mailbox["h_child"]  # [batch, nary, h_size]
+        h_cat = h_cat.view(h_cat.size(0), -1)  # [batch, nary * h_size]
+        f = torch.sigmoid(Wx + self.U_f(h_cat) + b_f)
+        h_cat_att = self.transformer_encoder(nodes.mailbox["h_child"])
+        h_cat_att = h_cat_att.view(h_cat_att.size(0), -1)
+        iou = self.W_iou(nodes.data["x"]) + self.U_iou(h_cat_att) + self.b_iou  # [batch, 3 * h_size]
         c = torch.sum(f.view(nodes.mailbox["c_child"].size()) * nodes.mailbox["c_child"], 1)
-        return {"c": c.view(c.size(0), -1), "iou": iou, "p_": p_}
+        return {"c": c.view(c.size(0), -1), "iou": iou}
 
 
 class TreeLSTM(nn.Module):
     def __init__(self,
-                 h_size=512,
+                 h_size=512, nary=3,
                  embed_dropout=0.2, model_dropout=0.4,
-                 num_users=2000, num_POIs=5000, num_cats=300, num_coos=50,
-                 user_embed_dim=128, fuse_embed_dim=128,
-                 nary=3, device='cuda'):
+                 num_users=3000, user_embed_dim=128,
+                 num_POIs=5000, POI_embed_dim=128,
+                 num_cats=300, cat_embed_dim=32,
+                 num_coos=1024, coo_embed_dim=64,
+                 device='cuda'):
         super(TreeLSTM, self).__init__()
         self.device = device
         self.h_size = h_size
         self.nary = nary
         # embedding
-        self.embedding_dim = user_embed_dim + fuse_embed_dim
-        self.fuse_len = num_POIs + num_cats + num_coos + num_POIs
+        self.embedding_dim = user_embed_dim + POI_embed_dim + cat_embed_dim + coo_embed_dim
         self.user_embedding = nn.Embedding(num_embeddings=num_users, embedding_dim=user_embed_dim)
-        self.fuse_embedding = nn.Embedding(num_embeddings=self.fuse_len, embedding_dim=fuse_embed_dim)
+        self.POI_embedding = nn.Embedding(num_embeddings=num_POIs, embedding_dim=POI_embed_dim)
+        self.cat_embedding = nn.Embedding(num_embeddings=num_cats, embedding_dim=cat_embed_dim)
+        self.coo_embedding = nn.Embedding(num_embeddings=num_coos, embedding_dim=coo_embed_dim)
         self.user_embedding_o = nn.Embedding(num_embeddings=num_users, embedding_dim=user_embed_dim)
-        self.fuse_embedding_o = nn.Embedding(num_embeddings=self.fuse_len, embedding_dim=fuse_embed_dim)
+        self.POI_embedding_o = nn.Embedding(num_embeddings=num_POIs, embedding_dim=POI_embed_dim)
+        self.cat_embedding_o = nn.Embedding(num_embeddings=num_cats, embedding_dim=cat_embed_dim)
+        self.coo_embedding_o = nn.Embedding(num_embeddings=num_coos, embedding_dim=coo_embed_dim)
         # positional encoding
         self.time_pos_encoder = nn.Embedding(num_embeddings=600, embedding_dim=self.embedding_dim)
         self.time_pos_encoder_o = nn.Embedding(num_embeddings=600, embedding_dim=self.embedding_dim)
@@ -79,16 +83,20 @@ class TreeLSTM(nn.Module):
         self.decoder_coo_o = nn.Linear(h_size, num_coos)
 
     def forward(self, in_trees, out_trees):
-        user_embedding = self.user_embedding(in_trees.user.long() * in_trees.mask)  # 1694 128
-        fuse_embedding = self.fuse_embedding(in_trees.features.long() * in_trees.mask)  # 1694 128
-        pe = self.time_pos_encoder(in_trees.time.long() * in_trees.mask)  # 256
-        concat_embedding = torch.cat((user_embedding, fuse_embedding), dim=1)  # 256
+        user_embedding = self.user_embedding(in_trees.features[:, 0].long() * in_trees.mask)
+        POI_embedding = self.POI_embedding(in_trees.features[:, 1].long() * in_trees.mask)
+        cat_embedding = self.cat_embedding(in_trees.features[:, 2].long() * in_trees.mask)
+        coo_embedding = self.coo_embedding(in_trees.features[:, 3].long() * in_trees.mask)
+        pe = self.time_pos_encoder(in_trees.time.long() * in_trees.mask)
+        concat_embedding = torch.cat((user_embedding, POI_embedding, cat_embedding, coo_embedding), dim=1)
         concat_embedding = concat_embedding + pe * 0.5
 
-        user_embedding_o = self.user_embedding_o(out_trees.user.long() * out_trees.mask)
-        fuse_embedding_o = self.fuse_embedding_o(out_trees.features.long() * out_trees.mask)
+        user_embedding_o = self.user_embedding_o(out_trees.features[:, 0].long() * out_trees.mask)
+        POI_embedding_o = self.POI_embedding_o(out_trees.features[:, 1].long() * out_trees.mask)
+        cat_embedding_o = self.cat_embedding_o(out_trees.features[:, 2].long() * out_trees.mask)
+        coo_embedding_o = self.coo_embedding_o(out_trees.features[:, 3].long() * out_trees.mask)
         pe_o = self.time_pos_encoder_o(out_trees.time.long() * out_trees.mask)
-        concat_embedding_o = torch.cat((user_embedding_o, fuse_embedding_o), dim=1)
+        concat_embedding_o = torch.cat((user_embedding_o, POI_embedding_o, cat_embedding_o, coo_embedding_o), dim=1)
         concat_embedding_o = concat_embedding_o + pe_o * 0.5
 
         g = in_trees.graph.to(self.device)
@@ -99,8 +107,6 @@ class TreeLSTM(nn.Module):
         g.ndata["c"] = torch.zeros((n, self.h_size)).to(self.device)
         g.ndata["h_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
         g.ndata["c_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
-        g.ndata["type"] = in_trees.type.long()
-        g.ndata["p_"] = torch.zeros((n, self.h_size)).to(self.device)
 
         dgl.prop_nodes_topo(graph=g,
                             message_func=self.cell.message_func,
@@ -108,7 +114,6 @@ class TreeLSTM(nn.Module):
                             apply_node_func=self.cell.apply_node_func)
 
         h = self.model_dropout(g.ndata.pop("h"))  # [batch_size, h_size]
-        h_ = self.model_dropout(g.ndata.pop("p_"))
 
         y_pred_POI = self.decoder_POI(h)
         y_pred_cat = self.decoder_cat(h)
@@ -123,8 +128,6 @@ class TreeLSTM(nn.Module):
         g_o.ndata["c"] = torch.zeros((n, self.h_size)).to(self.device)
         g_o.ndata["h_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
         g_o.ndata["c_child"] = torch.zeros((n, self.nary, self.h_size)).to(self.device)
-        g_o.ndata["type"] = out_trees.type.long()
-        g_o.ndata["p_"] = torch.zeros((n, self.h_size)).to(self.device)
 
         dgl.prop_nodes_topo(graph=g_o,
                             message_func=self.cell_o.message_func,
@@ -137,7 +140,7 @@ class TreeLSTM(nn.Module):
         y_pred_cat_o = self.decoder_cat_o(h_o)
         y_pred_coo_o = self.decoder_coo_o(h_o)
 
-        return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o, h, h_
+        return y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o
 
 
 class MultiTaskLoss(nn.Module):
