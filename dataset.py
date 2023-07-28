@@ -12,22 +12,12 @@ class TrajectoryTrainDataset(Dataset):
         data_df['local_time'] = pd.to_datetime(data_df['local_time'])  # convert time column to datetime format
         data_df = data_df.sort_values(['user_id', 'local_time'])  # sort
 
-        max_ = 0
-
         for trajectory_id, trajectory in tqdm(data_df.groupby('trajectory_id'), desc=f"Prepare training dataset"):
             user_id = trajectory_id.split('_')[0]
             user_idx = user_id2idx_dict[user_id]
             traj_idx = len(self.trajectories)
             self.trajectories[traj_idx] = []
             start_date = trajectory.iloc[0]['local_time']
-            cur_day_of_year = start_date.day_of_year
-            self.trajectories[traj_idx].append([])
-            record = {}
-            record[0] = 0
-            record[1] = 0
-            record[2] = 0
-            record[3] = 0
-            record[4] = 0
 
             for index in range(len(trajectory) - 1):
                 _, pid, cid, _, _, _, _, _, _, tim, _, _, _, _, _, coo = trajectory.iloc[index]
@@ -37,41 +27,10 @@ class TrajectoryTrainDataset(Dataset):
                 features = [user_idx, POI_idx, cat_idx, coo]
                 tim_info = int((tim - start_date).days * 24 + (tim - start_date).seconds / 60 / 60)
                 labels = [next_POI_idx, next_cat_idx, next_coo]
-                checkin = {'features': features, 'time': tim_info, 'labels': labels, 't': tim}
-                if tim.day_of_year == cur_day_of_year:
-                    self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1].append(checkin)
-                    if tim.hour <= 6:
-                        record[0] += 1
-                    elif tim.hour <= 12:
-                        record[1] += 1
-                    elif tim.hour <= 18:
-                        record[2] += 1
-                    elif tim.hour <= 24:
-                        record[3] += 1
-                else:
-                    for i in record:
-                        if record[i] < max_:
-                            max_ = max_
-                        else:
-                            max_ = record[i]
-                            for i in self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1]:
-                                print(i['t'], i['features'][1])
-                            print("--------------------")
-                    record = {}
-                    record[0] = 0
-                    record[1] = 0
-                    record[2] = 0
-                    record[3] = 0
-                    record[4] = 0
-                    # max_ = max_ if len(
-                    #     self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1]) < max_ else len(
-                    #     self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1])
-                    cur_day_of_year = tim.day_of_year
-                    self.trajectories[traj_idx].append([checkin])
+                checkin = {'features': features, 'time': tim_info, 'labels': labels}
+                self.trajectories[traj_idx].append(checkin)
 
         print(f"Train dataset length: ", len(self.trajectories))
-        print(max_)
-        exit()
 
     def __len__(self):
         return len(self.trajectories)
