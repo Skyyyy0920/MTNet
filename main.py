@@ -235,7 +235,8 @@ if __name__ == '__main__':
 
         # Logging
         logging.info(f"************************  Training epoch: {epoch + 1}/{args.epochs}  ************************")
-        logging.info(f"Current epoch's mean loss: {np.mean(loss_list)}\t\tlr: {optimizer.param_groups[0]['lr']}")
+        logging.info(f"Current epoch's mean loss: {np.mean(loss_list)}\t\tlr: {optimizer.param_groups[0]['lr']}"
+                     f"\t\tloss weight: {multi_task_loss.params}")
 
         # Save model
         if (epoch + 1) % 5 == 0 and epoch >= 80:
