@@ -17,7 +17,8 @@ class TrajectoryTrainDataset(Dataset):
             user_idx = user_id2idx_dict[user_id]
             traj_idx = len(self.trajectories)
             self.trajectories[traj_idx] = []
-            start_date = trajectory.iloc[0]['local_time']
+            cur_day_of_year = trajectory.iloc[0]['local_time'].day_of_year
+            self.trajectories[traj_idx].append([[], [], [], []])
 
             for index in range(len(trajectory) - 1):
                 _, pid, cid, _, _, _, _, _, _, tim, _, _, _, _, _, coo = trajectory.iloc[index]
@@ -25,10 +26,15 @@ class TrajectoryTrainDataset(Dataset):
                 POI_idx, cat_idx = POI_id2idx_dict[pid], cat_id2idx_dict[cid]
                 next_POI_idx, next_cat_idx = POI_id2idx_dict[next_pid], cat_id2idx_dict[next_cid]
                 features = [user_idx, POI_idx, cat_idx, coo]
-                tim_info = int((tim - start_date).days * 24 + (tim - start_date).seconds / 60 / 60)
+                tim_info = tim.hour * 4 + int(tim.minute / 15)  # Divide the time into time zones with 15-min intervals
                 labels = [next_POI_idx, next_cat_idx, next_coo]
                 checkin = {'features': features, 'time': tim_info, 'labels': labels}
-                self.trajectories[traj_idx].append(checkin)
+                if tim.day_of_year == cur_day_of_year:
+                    self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1][int(tim.hour / 6)].append(checkin)
+                else:
+                    cur_day_of_year = tim.day_of_year
+                    self.trajectories[traj_idx].append([[], [], [], []])
+                    self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1][int(tim.hour / 6)].append(checkin)
 
         print(f"Train dataset length: ", len(self.trajectories))
 
@@ -102,7 +108,8 @@ class TrajectoryTestDataset(Dataset):
             user_idx = user_id2idx_dict[user_id]
             traj_idx = len(self.trajectories)
             self.trajectories[traj_idx] = []
-            start_date = trajectory.iloc[0]['local_time']
+            cur_day_of_year = trajectory.iloc[0]['local_time'].day_of_year
+            self.trajectories[traj_idx].append([[], [], [], []])
 
             for index in range(len(trajectory) - 1):
                 _, pid, cid, _, _, _, _, _, _, tim, _, _, _, _, _, coo = trajectory.iloc[index]
@@ -110,13 +117,18 @@ class TrajectoryTestDataset(Dataset):
                 POI_idx, cat_idx = POI_id2idx_dict[pid], cat_id2idx_dict[cid]
                 next_POI_idx, next_cat_idx = POI_id2idx_dict[next_pid], cat_id2idx_dict[next_cid]
                 features = [user_idx, POI_idx, cat_idx, coo]
-                tim_info = int((tim - start_date).days * 24 + (tim - start_date).seconds / 60 / 60)
+                tim_info = tim.hour * 4 + int(tim.minute / 15)  # Divide the time into time zones with 15-min intervals
                 if index == len(trajectory) - 2:
                     labels = [next_POI_idx, next_cat_idx, next_coo]
                 else:
                     labels = [-1, -1, -1]
                 checkin = {'features': features, 'time': tim_info, 'labels': labels}
-                self.trajectories[traj_idx].append(checkin)
+                if tim.day_of_year == cur_day_of_year:
+                    self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1][int(tim.hour / 6)].append(checkin)
+                else:
+                    cur_day_of_year = tim.day_of_year
+                    self.trajectories[traj_idx].append([[], [], [], []])
+                    self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1][int(tim.hour / 6)].append(checkin)
 
         print(f"Test dataset length: ", len(self.trajectories))
 
