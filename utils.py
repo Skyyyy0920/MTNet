@@ -137,11 +137,12 @@ def add_true_node(tree, trajectory, index, parent_node_id, nary):
 
     if index - (nary - 1) > 0:
         add_true_node(tree, trajectory, index - (nary - 1), sub_parent_node_id, nary)
+        tree.add_node(sub_parent_node_id, x=[0] * 4, time=0, y=trajectory[index - (nary - 1)]['labels'], mask=0, type=0)
 
 
 def add_period_node(tree, trajectory, nary):
     node_id = tree.number_of_nodes()
-    tree.add_node(node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)  # empty node TODO: label?
+    tree.add_node(node_id, x=[0] * 4, time=0, y=trajectory[len(trajectory) - 1]['labels'], mask=0, type=0)
 
     if len(trajectory) > 0:
         add_true_node(tree, trajectory, len(trajectory), node_id, nary)
@@ -151,7 +152,7 @@ def add_period_node(tree, trajectory, nary):
 
 def add_day_node(tree, trajectory, labels, index, nary):
     node_id = tree.number_of_nodes()
-    tree.add_node(node_id, x=[0] * 4, time=0, y=labels[index], mask=0, type=0)  # empty node TODO: label?
+    tree.add_node(node_id, x=[0] * 4, time=0, y=labels[index], mask=0, type=0)
     if index > 0:  # recursion
         child_node_id = add_day_node(tree, trajectory, labels, index - 1, nary)
         tree.add_edge(child_node_id, node_id)
