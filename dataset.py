@@ -128,7 +128,7 @@ class TrajectoryTestDataset(Dataset):
                     labels = [next_POI_idx, next_cat_idx, next_coo]
                 else:
                     labels = [-1, -1, -1]
-                checkin = {'features': features, 'time': tim_info, 'labels': labels}
+                checkin = {'features': features, 'time': tim_info, 'labels': [-1, -1, -1]}
                 if next_tim.day_of_year != tim.day_of_year or index == len(trajectory) - 2:
                     self.labels[traj_idx].append(labels)
                 if tim.day_of_year == cur_day_of_year:
