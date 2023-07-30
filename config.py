@@ -29,7 +29,7 @@ def get_args():
     # Model hyper-parameters
     parser.add_argument('--nary',
                         type=int,
-                        default=3,
+                        default=5,
                         help='n-ary tree')
     parser.add_argument('--user_embed_dim',
                         type=int,

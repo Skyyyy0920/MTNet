@@ -7,6 +7,7 @@ class TrajectoryTrainDataset(Dataset):
     def __init__(self, data_df, map_set):
         user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict = map_set
         self.trajectories = {}
+        self.labels = {}
 
         data_df = data_df.groupby(['trajectory_id']).filter(lambda x: len(x) > 2)
         data_df['local_time'] = pd.to_datetime(data_df['local_time'])  # convert time column to datetime format
@@ -17,6 +18,7 @@ class TrajectoryTrainDataset(Dataset):
             user_idx = user_id2idx_dict[user_id]
             traj_idx = len(self.trajectories)
             self.trajectories[traj_idx] = []
+            self.labels[traj_idx] = []
             cur_day_of_year = trajectory.iloc[0]['local_time'].day_of_year
             self.trajectories[traj_idx].append([[], [], [], []])
 
@@ -29,6 +31,8 @@ class TrajectoryTrainDataset(Dataset):
                 tim_info = tim.hour * 4 + int(tim.minute / 15)  # Divide the time into time zones with 15-min intervals
                 labels = [next_POI_idx, next_cat_idx, next_coo]
                 checkin = {'features': features, 'time': tim_info, 'labels': labels}
+                if next_tim.day_of_year != tim.day_of_year or index == len(trajectory) - 2:
+                    self.labels[traj_idx].append(labels)
                 if tim.day_of_year == cur_day_of_year:
                     self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1][int(tim.hour / 6)].append(checkin)
                 else:
@@ -42,7 +46,7 @@ class TrajectoryTrainDataset(Dataset):
         return len(self.trajectories)
 
     def __getitem__(self, item):
-        return self.trajectories[item]
+        return self.trajectories[item], self.labels[item]
 
 
 class TrajectoryValDataset(Dataset):
@@ -93,6 +97,7 @@ class TrajectoryTestDataset(Dataset):
     def __init__(self, data_df, map_set):
         user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict = map_set
         self.trajectories = {}
+        self.labels = {}
 
         data_df['user_id'] = data_df['user_id'].astype(str)
         data_df = data_df[data_df['user_id'].isin(user_id2idx_dict.keys())]
@@ -108,6 +113,7 @@ class TrajectoryTestDataset(Dataset):
             user_idx = user_id2idx_dict[user_id]
             traj_idx = len(self.trajectories)
             self.trajectories[traj_idx] = []
+            self.labels[traj_idx] = []
             cur_day_of_year = trajectory.iloc[0]['local_time'].day_of_year
             self.trajectories[traj_idx].append([[], [], [], []])
 
@@ -123,6 +129,8 @@ class TrajectoryTestDataset(Dataset):
                 else:
                     labels = [-1, -1, -1]
                 checkin = {'features': features, 'time': tim_info, 'labels': labels}
+                if next_tim.day_of_year != tim.day_of_year or index == len(trajectory) - 2:
+                    self.labels[traj_idx].append(labels)
                 if tim.day_of_year == cur_day_of_year:
                     self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1][int(tim.hour / 6)].append(checkin)
                 else:
@@ -136,4 +144,4 @@ class TrajectoryTestDataset(Dataset):
         return len(self.trajectories)
 
     def __getitem__(self, item):
-        return self.trajectories[item]
+        return self.trajectories[item], self.labels[item]

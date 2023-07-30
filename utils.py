@@ -119,25 +119,53 @@ def plot_tree(g):
     plt.show()
 
 
-def add_children(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
-    """
-    Using DFS to construct the tree for N-ary TreeLSTM
-    """
-    node = trajectory[index]
-    idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], x=node['features'], time=node['time'], y=node['labels'], mask=1, type=0)
+def add_true_node(tree, trajectory, index, parent_node_id, nary):
+    for i in range(nary - 1, 0, -1):
+        if index - i >= 0:
+            node_id = tree.number_of_nodes()
+            node = trajectory[index]
+            tree.add_node(node_id, x=node['features'], time=node['time'], y=node['labels'], mask=1, type=1)
+            tree.add_edge(node_id, parent_node_id)
+        else:  # empty node
+            node_id = tree.number_of_nodes()
+            tree.add_node(node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)
+            tree.add_edge(node_id, parent_node_id)
 
-    if index > 0 and flag_dict[index]:
-        flag_dict[index] = 0  # already play as parent node
-        for i in range(nary, 0, -1):
-            if index - i >= 0:
-                add_children(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
-                tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
-            else:  # fictitious node
-                node_id = tree.number_of_nodes()
-                tree.add_node(node_id, x=node['features'], time=node['time'], y=[-1] * 3, mask=0, type=1)
-                tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
-    return
+    sub_parent_node_id = tree.number_of_nodes()
+    tree.add_node(sub_parent_node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)  # empty node TODO: label?
+    tree.add_edge(sub_parent_node_id, parent_node_id)
+
+    if index - (nary - 1) > 0:
+        add_true_node(tree, trajectory, index - (nary - 1), sub_parent_node_id, nary)
+
+
+def add_period_node(tree, trajectory, nary):
+    node_id = tree.number_of_nodes()
+    tree.add_node(node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)  # empty node TODO: label?
+
+    if len(trajectory) > 0:
+        add_true_node(tree, trajectory, len(trajectory) - 1, node_id, nary)
+
+    return node_id
+
+
+def add_day_node(tree, trajectory, labels, index, nary):
+    node_id = tree.number_of_nodes()
+    tree.add_node(node_id, x=[0] * 4, time=0, y=labels[index], mask=0, type=0)  # empty node TODO: label?
+    if index > 0:  # recursion
+        child_node_id = add_day_node(tree, trajectory, labels, index - 1, nary)
+        tree.add_edge(child_node_id, node_id)
+    else:
+        fake_node_id = tree.number_of_nodes()
+        tree.add_node(fake_node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)
+        tree.add_edge(fake_node_id, node_id)
+
+    day_trajectory = trajectory[index]
+    for i in range(len(day_trajectory)):  # Four time periods， 0-6， 7-12， 13-18， 19-24
+        period_node_id = add_period_node(tree, day_trajectory[i], nary)
+        tree.add_edge(period_node_id, node_id)
+
+    return node_id
 
 
 def add_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
@@ -166,18 +194,15 @@ def add_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
     return max_index
 
 
-def construct_MobilityTree(trajectory, nary, need_plot, tree_type):
+def construct_MobilityTree(trajectory, labels, nary, need_plot, tree_type):
     tree = nx.DiGraph()
-    idx2idx_dict = {}
-    flag_dict = dict(zip(range(len(trajectory)), np.ones(len(trajectory))))
 
-    start_index = len(trajectory) - 1
     if tree_type == 'in':  # in tree
-        add_children(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
+        add_day_node(tree, trajectory, labels, len(trajectory) - 1, nary)
     elif tree_type == 'out':  # out tree
-        add_children_out(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
+        pass
     else:
-        print("Tree type wrong!")
+        print("Tree type is wrong!")
 
     if need_plot:
         plot_tree(tree)  # optional
