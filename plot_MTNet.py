@@ -14,12 +14,12 @@ def plot_tree(g):
                      node_size=20,
                      node_color=[[0.5, 0.5, 0.5]],
                      arrowsize=8)
-    node_labels = nx.get_node_attributes(g, 'x')
-    nx.draw_networkx_labels(g, pos, labels=node_labels, font_color='blue')
+    # node_labels = nx.get_node_attributes(g, 'x')
+    # nx.draw_networkx_labels(g, pos, labels=node_labels, font_color='blue')
     node_labels = nx.get_node_attributes(g, 'y')
     nx.draw_networkx_labels(g, pos, labels=node_labels, font_color='red')
-    node_labels = nx.get_node_attributes(g, 'time')
-    nx.draw_networkx_labels(g, pos, labels=node_labels, font_color='green')
+    # node_labels = nx.get_node_attributes(g, 'time')
+    # nx.draw_networkx_labels(g, pos, labels=node_labels, font_color='green')
     plt.show()
 
 
@@ -107,16 +107,16 @@ def add_true_node(tree, trajectory, index, parent_node_id, nary):
     for i in range(nary - 1, 0, -1):
         if index - i >= 0:
             node_id = tree.number_of_nodes()
-            node = trajectory[index]
+            node = trajectory[index - i]
             tree.add_node(node_id, x=node['features'], time=node['time'], y=node['labels'], mask=1, type=1)
             tree.add_edge(node_id, parent_node_id)
         else:  # empty node
             node_id = tree.number_of_nodes()
-            tree.add_node(node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)
+            tree.add_node(node_id, x=[0] * 4, time=0, y=[], mask=0, type=0)
             tree.add_edge(node_id, parent_node_id)
 
     sub_parent_node_id = tree.number_of_nodes()
-    tree.add_node(sub_parent_node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)  # empty node TODO: label?
+    tree.add_node(sub_parent_node_id, x=[0] * 4, time=0, y=[], mask=0, type=0)  # empty node TODO: label?
     tree.add_edge(sub_parent_node_id, parent_node_id)
 
     if index - (nary - 1) > 0:
@@ -125,10 +125,10 @@ def add_true_node(tree, trajectory, index, parent_node_id, nary):
 
 def add_period_node(tree, trajectory, nary):
     node_id = tree.number_of_nodes()
-    tree.add_node(node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)  # empty node TODO: label?
+    tree.add_node(node_id, x=[0] * 4, time=0, y=[], mask=0, type=0)  # empty node TODO: label?
 
     if len(trajectory) > 0:
-        add_true_node(tree, trajectory, len(trajectory) - 1, node_id, nary)
+        add_true_node(tree, trajectory, len(trajectory), node_id, nary)
 
     return node_id
 
@@ -141,7 +141,7 @@ def add_day_node(tree, trajectory, labels, index, nary):
         tree.add_edge(child_node_id, node_id)
     else:
         fake_node_id = tree.number_of_nodes()
-        tree.add_node(fake_node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)
+        tree.add_node(fake_node_id, x=[0] * 4, time=0, y=[], mask=0, type=0)
         tree.add_edge(fake_node_id, node_id)
 
     day_trajectory = trajectory[index]
@@ -183,34 +183,68 @@ def construct_MobilityTree(trajectory, labels, nary, need_plot, tree_type):
 
 
 if __name__ == "__main__":
-    dataset = 'NYC'
-    train_df = pd.read_csv(f'dataset/{dataset}/{dataset}_train.csv')
+    # dataset = 'NYC'
+    # train_df = pd.read_csv(f'dataset/{dataset}/{dataset}_train.csv')
+    #
+    # # User id to index
+    # uid_list = [str(uid) for uid in list(set(train_df['user_id'].to_list()))]
+    # user_id2idx_dict = dict(zip(uid_list, range(len(uid_list))))
+    # # POI id to index
+    # POI_list = list(set(train_df['POI_id'].tolist()))
+    # POI_list.sort()
+    # POI_id2idx_dict = dict(zip(POI_list, range(len(POI_list))))
+    # # Cat id to index
+    # cat_list = list(set(train_df['POI_catid'].tolist()))
+    # cat_list.sort()
+    # cat_id2idx_dict = dict(zip(cat_list, range(len(cat_list))))
+    #
+    # data_train = np.column_stack((train_df['longitude'], train_df['latitude']))
+    # kmeans_train = KMeans(n_clusters=50)
+    # kmeans_train.fit(data_train)
+    # train_df['coo_label'] = kmeans_train.labels_
+    #
+    # # Build dataset
+    # map_set = (user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict)
+    # train_dataset = TrajectoryTrainDataset(train_df, map_set)
+    # train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True, drop_last=False,
+    #                               pin_memory=True, num_workers=0, collate_fn=lambda x: x)
+    #
+    # for b_idx, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc="Training"):
+    #     in_tree_batcher, out_tree_batcher = [], []
+    #     for trajectory, label in batch:
+    #         construct_MobilityTree(trajectory, label, 5, True, 'in')
+    #     break
+    f = [0] * 4
+    trajectory = [[[{'features': f, 'time': 0, 'labels': [1]}, {'features': f, 'time': 0, 'labels': [2]},
+                    {'features': f, 'time': 0, 'labels': [3]}, {'features': f, 'time': 0, 'labels': [4]},
+                    {'features': f, 'time': 0, 'labels': [5]}, {'features': f, 'time': 0, 'labels': [6]}],
+                   [],
+                   [],
+                   [{'features': f, 'time': 0, 'labels': [4, 1]}]],
+                  [[],
+                   [{'features': f, 'time': 0, 'labels': [1]}, {'features': f, 'time': 0, 'labels': [2]},
+                    {'features': f, 'time': 0, 'labels': [3]}, {'features': f, 'time': 0, 'labels': [4]},
+                    {'features': f, 'time': 0, 'labels': [5]}, {'features': f, 'time': 0, 'labels': [6]}],
+                   [{'features': f, 'time': 0, 'labels': [1]}, {'features': f, 'time': 0, 'labels': [2]},
+                    {'features': f, 'time': 0, 'labels': [3]}, {'features': f, 'time': 0, 'labels': [4]},
+                    {'features': f, 'time': 0, 'labels': [5]}, {'features': f, 'time': 0, 'labels': [6]}],
+                   []],
+                  [[],
+                   [],
+                   [],
+                   []],
+                  [[],
+                   [],
+                   [],
+                   []],
+                  [[],
+                   [],
+                   [],
+                   []],
+                  [[],
+                   [],
+                   [],
+                   []]]
 
-    # User id to index
-    uid_list = [str(uid) for uid in list(set(train_df['user_id'].to_list()))]
-    user_id2idx_dict = dict(zip(uid_list, range(len(uid_list))))
-    # POI id to index
-    POI_list = list(set(train_df['POI_id'].tolist()))
-    POI_list.sort()
-    POI_id2idx_dict = dict(zip(POI_list, range(len(POI_list))))
-    # Cat id to index
-    cat_list = list(set(train_df['POI_catid'].tolist()))
-    cat_list.sort()
-    cat_id2idx_dict = dict(zip(cat_list, range(len(cat_list))))
-
-    data_train = np.column_stack((train_df['longitude'], train_df['latitude']))
-    kmeans_train = KMeans(n_clusters=50)
-    kmeans_train.fit(data_train)
-    train_df['coo_label'] = kmeans_train.labels_
-
-    # Build dataset
-    map_set = (user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict)
-    train_dataset = TrajectoryTrainDataset(train_df, map_set)
-    train_dataloader = DataLoader(train_dataset, batch_size=128, shuffle=True, drop_last=False,
-                                  pin_memory=True, num_workers=0, collate_fn=lambda x: x)
-
-    for b_idx, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc="Training"):
-        in_tree_batcher, out_tree_batcher = [], []
-        for trajectory, label in batch:
-            construct_MobilityTree(trajectory, label, 5, True, 'in')
-        break
+    label = [[[1] * 3], [[2] * 3], [[3] * 3], [[4] * 3], [[5] * 3], [[6] * 3]]
+    construct_MobilityTree(trajectory, label, 5, True, 'in')

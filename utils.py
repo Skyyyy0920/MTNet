@@ -123,7 +123,7 @@ def add_true_node(tree, trajectory, index, parent_node_id, nary):
     for i in range(nary - 1, 0, -1):
         if index - i >= 0:
             node_id = tree.number_of_nodes()
-            node = trajectory[index]
+            node = trajectory[index - i]
             tree.add_node(node_id, x=node['features'], time=node['time'], y=node['labels'], mask=1, type=1)
             tree.add_edge(node_id, parent_node_id)
         else:  # empty node
@@ -144,7 +144,7 @@ def add_period_node(tree, trajectory, nary):
     tree.add_node(node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)  # empty node TODO: label?
 
     if len(trajectory) > 0:
-        add_true_node(tree, trajectory, len(trajectory) - 1, node_id, nary)
+        add_true_node(tree, trajectory, len(trajectory), node_id, nary)
 
     return node_id
 
