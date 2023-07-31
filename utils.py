@@ -119,7 +119,7 @@ def plot_tree(g):
     plt.show()
 
 
-def add_true_node(tree, trajectory, index, parent_node_id, nary):
+def add_period_node(tree, trajectory, index, parent_node_id, nary):
     for i in range(nary - 1, 0, -1):
         if index - i >= 0:
             node_id = tree.number_of_nodes()
@@ -131,25 +131,6 @@ def add_true_node(tree, trajectory, index, parent_node_id, nary):
             tree.add_node(node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)
             tree.add_edge(node_id, parent_node_id)
 
-    sub_parent_node_id = tree.number_of_nodes()
-    tree.add_node(sub_parent_node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)  # empty node TODO: label?
-    tree.add_edge(sub_parent_node_id, parent_node_id)
-
-    if index - (nary - 1) > 0:
-        add_true_node(tree, trajectory, index - (nary - 1), sub_parent_node_id, nary)
-        tree.add_node(sub_parent_node_id, x=[0] * 4, time=0, y=trajectory[index - (nary - 1)]['labels'], mask=0, type=0)
-
-
-def add_period_node(tree, trajectory, nary):
-    node_id = tree.number_of_nodes()
-    period_label = trajectory[len(trajectory) - 1]['labels'] if len(trajectory) > 0 else [-1] * 3
-    tree.add_node(node_id, x=[0] * 4, time=0, y=period_label, mask=0, type=0)
-
-    if len(trajectory) > 0:
-        add_true_node(tree, trajectory, len(trajectory), node_id, nary)
-
-    return node_id
-
 
 def add_day_node(tree, trajectory, labels, index, nary):
     node_id = tree.number_of_nodes()
@@ -158,14 +139,11 @@ def add_day_node(tree, trajectory, labels, index, nary):
         child_node_id = add_day_node(tree, trajectory, labels, index - 1, nary)
         tree.add_edge(child_node_id, node_id)
     else:
-        fake_node_id = tree.number_of_nodes()
-        tree.add_node(fake_node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)
-        tree.add_edge(fake_node_id, node_id)
+        empty_node_id = tree.number_of_nodes()
+        tree.add_node(empty_node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)
+        tree.add_edge(empty_node_id, node_id)
 
-    day_trajectory = trajectory[index]
-    for i in range(len(day_trajectory)):  # Four time periods， 0-6， 7-12， 13-18， 19-24
-        period_node_id = add_period_node(tree, day_trajectory[i], nary)
-        tree.add_edge(period_node_id, node_id)
+    add_period_node(tree, trajectory[index], len(trajectory[index]), node_id, nary)
 
     return node_id
 
