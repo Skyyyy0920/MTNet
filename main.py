@@ -185,44 +185,27 @@ if __name__ == '__main__':
     for epoch in range(args.epochs):
         TreeLSTM_model.train()
         TreeLSTM_model.cell.train()
-        # TreeLSTM_model.cell_o.train()
         multi_task_loss.train()
 
         loss_list = []
 
         for b_idx, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc="Training"):
-            in_tree_batcher, out_tree_batcher = [], []
+            MT_batcher = []
             for trajectory, label in batch:
-                traj_in_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree, 'in')
-                in_tree_batcher.append(traj_in_tree.to(args.device))
-                # traj_out_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree, 'out')
-                # out_tree_batcher.append(traj_out_tree.to(args.device))
+                mobility_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree)
+                MT_batcher.append(mobility_tree.to(args.device))
 
-            in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
-            in_trees = SSTBatch(graph=in_tree_batch,
-                                features=in_tree_batch.ndata["x"].to(args.device),
-                                time=in_tree_batch.ndata["time"].to(args.device),
-                                label=in_tree_batch.ndata["y"].to(args.device),
-                                mask=in_tree_batch.ndata["mask"].to(args.device),
-                                type=in_tree_batch.ndata["type"].to(args.device))
-            # out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
-            # out_trees = SSTBatch(graph=out_tree_batch,
-            #                      features=out_tree_batch.ndata["x"].to(args.device),
-            #                      time=out_tree_batch.ndata["time"].to(args.device),
-            #                      label=out_tree_batch.ndata["y"].to(args.device),
-            #                      mask=out_tree_batch.ndata["mask"].to(args.device),
-            #                      type=out_tree_batch.ndata["type"].to(args.device))
+            MT_batch = dgl.batch(MT_batcher).to(args.device)
+            MT_input = SSTBatch(graph=MT_batch,
+                                features=MT_batch.ndata["x"].to(args.device),
+                                time=MT_batch.ndata["time"].to(args.device),
+                                label=MT_batch.ndata["y"].to(args.device),
+                                mask=MT_batch.ndata["mask"].to(args.device),
+                                type=MT_batch.ndata["type"].to(args.device))
 
-            # y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
-            #     TreeLSTM_model(in_trees, out_trees)
-            y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(in_trees)
+            y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(MT_input)
+            y_POI, y_cat, y_coo = MT_input.label[:, 0], MT_input.label[:, 1], MT_input.label[:, 2]
 
-            y_POI, y_cat, y_coo = in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2]
-            # y_POI_o, y_cat_o, y_coo_o = out_trees.label[:, 0], out_trees.label[:, 1], out_trees.label[:, 2]
-
-            # loss_POI = criterion_POI(y_pred_POI, y_POI.long()) + criterion_POI(y_pred_POI_o, y_POI_o.long())
-            # loss_cat = criterion_cat(y_pred_cat, y_cat.long()) + criterion_cat(y_pred_cat_o, y_cat_o.long())
-            # loss_coo = criterion_coo(y_pred_coo, y_coo.long()) + criterion_coo(y_pred_coo_o, y_coo_o.long())
             loss_POI = criterion_POI(y_pred_POI, y_POI.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long())
             loss_coo = criterion_coo(y_pred_coo, y_coo.long())
@@ -258,7 +241,6 @@ if __name__ == '__main__':
         # ==================================================================================================
         TreeLSTM_model.eval()
         TreeLSTM_model.cell.eval()
-        # TreeLSTM_model.cell_o.eval()
         multi_task_loss.eval()
 
         with torch.no_grad():
@@ -267,48 +249,27 @@ if __name__ == '__main__':
             y_pred_coo_list, y_label_coo_list = [], []
             # Start testing
             for batch in test_dataloader:
-                in_tree_batcher, out_tree_batcher = [], []
+                MT_batcher = []
                 for trajectory, label in batch:
-                    traj_in_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree, 'in')
-                    in_tree_batcher.append(traj_in_tree.to(args.device))
-                    # traj_out_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree, 'out')
-                    # out_tree_batcher.append(traj_out_tree.to(args.device))
+                    mobility_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree)
+                    MT_batcher.append(mobility_tree.to(args.device))
 
-                in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
-                in_trees = SSTBatch(graph=in_tree_batch,
-                                    features=in_tree_batch.ndata["x"].to(args.device),
-                                    time=in_tree_batch.ndata["time"].to(args.device),
-                                    label=in_tree_batch.ndata["y"].to(args.device),
-                                    mask=in_tree_batch.ndata["mask"].to(args.device),
-                                    type=in_tree_batch.ndata["type"].to(args.device))
-                # out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
-                # out_trees = SSTBatch(graph=out_tree_batch,
-                #                      features=out_tree_batch.ndata["x"].to(args.device),
-                #                      time=out_tree_batch.ndata["time"].to(args.device),
-                #                      label=out_tree_batch.ndata["y"].to(args.device),
-                #                      mask=out_tree_batch.ndata["mask"].to(args.device),
-                #                      type=out_tree_batch.ndata["type"].to(args.device))
+                MT_batch = dgl.batch(MT_batcher).to(args.device)
+                MT_input = SSTBatch(graph=MT_batch,
+                                    features=MT_batch.ndata["x"].to(args.device),
+                                    time=MT_batch.ndata["time"].to(args.device),
+                                    label=MT_batch.ndata["y"].to(args.device),
+                                    mask=MT_batch.ndata["mask"].to(args.device),
+                                    type=MT_batch.ndata["type"].to(args.device))
 
-                # y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
-                #     TreeLSTM_model(in_trees, out_trees)
-                y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(in_trees)
+                y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(MT_input)
+                y_POI, y_cat, y_coo = MT_input.label[:, 0], MT_input.label[:, 1], MT_input.label[:, 2]
 
-                y_POI, y_cat, y_coo = in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2]
-
-                # alpha = 0.5
-                # y_pred_POI_all = alpha * y_pred_POI + (1 - alpha) * y_pred_POI_o
-                # y_pred_POI_all = y_pred_POI + y_pred_POI_o
-                # y_pred_cat_all = y_pred_cat + y_pred_cat_o
-                # y_pred_coo_all = y_pred_coo + y_pred_coo_o
-                y_pred_POI_all = y_pred_POI
-                y_pred_cat_all = y_pred_cat
-                y_pred_coo_all = y_pred_coo
-
-                y_pred_POI_list.append(y_pred_POI_all.detach().cpu().numpy())
+                y_pred_POI_list.append(y_pred_POI.detach().cpu().numpy())
                 y_label_POI_list.append(y_POI.detach().cpu().numpy())
-                y_pred_cat_list.append(y_pred_cat_all.detach().cpu().numpy())
+                y_pred_cat_list.append(y_pred_cat.detach().cpu().numpy())
                 y_label_cat_list.append(y_cat.detach().cpu().numpy())
-                y_pred_coo_list.append(y_pred_coo_all.detach().cpu().numpy())
+                y_pred_coo_list.append(y_pred_coo.detach().cpu().numpy())
                 y_label_coo_list.append(y_coo.detach().cpu().numpy())
 
             y_label_POI_numpy, y_pred_POI_numpy = get_pred_label(y_label_POI_list, y_pred_POI_list)
