@@ -108,24 +108,27 @@ def add_true_node(tree, trajectory, index, parent_node_id, nary):
         if index - i >= 0:
             node_id = tree.number_of_nodes()
             node = trajectory[index - i]
-            tree.add_node(node_id, x=node['features'], time=node['time'], y=node['labels'], mask=1, type=1)
+            tree.add_node(node_id, x=node['features'], time=node['time'], y=node['labels'], mask=1, mask2=0, type=1)
             tree.add_edge(node_id, parent_node_id)
         else:  # empty node
             node_id = tree.number_of_nodes()
-            tree.add_node(node_id, x=[0] * 4, time=0, y=[], mask=0, type=0)
+            tree.add_node(node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, mask2=0, type=-1)
             tree.add_edge(node_id, parent_node_id)
 
     sub_parent_node_id = tree.number_of_nodes()
-    tree.add_node(sub_parent_node_id, x=[0] * 4, time=0, y=[], mask=0, type=0)  # empty node TODO: label?
+    tree.add_node(sub_parent_node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, mask2=0, type=-1)
     tree.add_edge(sub_parent_node_id, parent_node_id)
 
     if index - (nary - 1) > 0:
         add_true_node(tree, trajectory, index - (nary - 1), sub_parent_node_id, nary)
+        tree.add_node(sub_parent_node_id, x=[0] * 4, time=0, y=trajectory[index - (nary - 1)]['labels'], mask=0,
+                      mask2=0, type=-1)
 
 
 def add_period_node(tree, trajectory, nary):
     node_id = tree.number_of_nodes()
-    tree.add_node(node_id, x=[0] * 4, time=0, y=[], mask=0, type=0)  # empty node TODO: label?
+    period_label = trajectory[len(trajectory) - 1]['labels'] if len(trajectory) > 0 else [-1] * 3
+    tree.add_node(node_id, x=[0] * 4, time=0, y=period_label, mask=0, mask2=1, type=-1)
 
     if len(trajectory) > 0:
         add_true_node(tree, trajectory, len(trajectory), node_id, nary)
@@ -135,48 +138,26 @@ def add_period_node(tree, trajectory, nary):
 
 def add_day_node(tree, trajectory, labels, index, nary):
     node_id = tree.number_of_nodes()
-    tree.add_node(node_id, x=[0] * 4, time=0, y=labels[index], mask=0, type=0)  # empty node TODO: label?
+    tree.add_node(node_id, x=[0] * 4, time=0, y=labels[index], mask=0, mask2=1, type=0)
     if index > 0:  # recursion
         child_node_id = add_day_node(tree, trajectory, labels, index - 1, nary)
         tree.add_edge(child_node_id, node_id)
     else:
         fake_node_id = tree.number_of_nodes()
-        tree.add_node(fake_node_id, x=[0] * 4, time=0, y=[], mask=0, type=0)
+        tree.add_node(fake_node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, mask2=0, type=-1)
         tree.add_edge(fake_node_id, node_id)
 
     day_trajectory = trajectory[index]
-    for i in range(len(day_trajectory)):  # Four time periods， 0-6， 7-12， 13-18， 19-24
+    for i in range(len(day_trajectory)):  # Four time periods， 0-6， 6-12， 12-18， 18-24
         period_node_id = add_period_node(tree, day_trajectory[i], nary)
         tree.add_edge(period_node_id, node_id)
 
     return node_id
 
 
-# def construct_MobilityTree(trajectory, nary, need_plot, tree_type):
-#     tree = nx.DiGraph()
-#     idx2idx_dict = {}
-#     flag_dict = dict(zip(range(len(trajectory)), np.full(len(trajectory), 2)))
-#
-#     start_index = len(trajectory) - 1
-#     if tree_type == 'in':  # in tree
-#         add_children(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
-#     elif tree_type == 'out':  # out tree
-#         add_children_out(tree, trajectory, start_index, idx2idx_dict, flag_dict, nary)
-#     else:
-#         print("Tree type wrong!")
-#
-#     if need_plot:
-#         plot_tree(tree)  # optional
-
-def construct_MobilityTree(trajectory, labels, nary, need_plot, tree_type):
+def construct_MobilityTree(trajectory, labels, nary, need_plot):
     tree = nx.DiGraph()
-
-    if tree_type == 'in':  # in tree
-        add_day_node(tree, trajectory, labels, len(trajectory) - 1, nary)
-    elif tree_type == 'out':  # out tree
-        pass
-    else:
-        print("Tree type is wrong!")
+    add_day_node(tree, trajectory, labels, len(trajectory) - 1, nary)
 
     if need_plot:
         plot_tree(tree)  # optional
