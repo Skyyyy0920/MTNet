@@ -12,7 +12,7 @@ def get_args():
     # Operation environment
     parser.add_argument('--seed',
                         type=int,
-                        default=20010920,
+                        default=20020310,
                         help='Random seed')
     parser.add_argument('--device',
                         type=str,
@@ -79,7 +79,7 @@ def get_args():
                         help='Gradient accumulation to solve the GPU memory problem')
     parser.add_argument('--epochs',
                         type=int,
-                        default=80,
+                        default=30,
                         help='Number of epochs to train')
     parser.add_argument('--lr',
                         type=float,
@@ -99,7 +99,7 @@ def get_args():
                         help='Weight decay (L2 loss on parameters)')
     parser.add_argument('--patience',
                         type=int,
-                        default=3,
+                        default=4,
                         help='the patience for early stopping')
 
     # Experiment configuration
@@ -123,6 +123,14 @@ def get_args():
                         type=str,
                         default='',
                         help='Loading model path')
+    parser.add_argument('--save_model',
+                        type=bool,
+                        default=False,
+                        help='Whether to save model or not')
+    parser.add_argument('--save_data',
+                        type=bool,
+                        default=False,
+                        help='Whether to save data or not')
 
     args = parser.parse_args()
     return args

@@ -99,7 +99,7 @@ class TreeLSTM(nn.Module):
         self.cat_embedding = nn.Embedding(num_embeddings=num_cats, embedding_dim=cat_embed_dim)
         self.coo_embedding = nn.Embedding(num_embeddings=num_coos, embedding_dim=coo_embed_dim)
         # positional encoding layer
-        self.time_pos_encoder = nn.Embedding(num_embeddings=96, embedding_dim=self.embedding_dim)
+        self.time_pos_encoder = nn.Embedding(num_embeddings=96, embedding_dim=self.embedding_dim)  # 24*4
         # dropout layer
         self.embed_dropout = nn.Dropout(embed_dropout)
         self.model_dropout = nn.Dropout(model_dropout)

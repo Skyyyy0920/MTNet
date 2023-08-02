@@ -231,8 +231,8 @@ if __name__ == '__main__':
 
         # Logging
         logging.info(f"************************  Training epoch: {epoch + 1}/{args.epochs}  ************************")
-        logging.info(f"Current epoch's mean loss: {np.mean(loss_list)}\t\tlr: {optimizer.param_groups[0]['lr']}"
-                     f"\t\tloss weight: {multi_task_loss.params}")
+        logging.info(f"Current epoch's mean loss: {np.mean(loss_list)}\t\tLr: {optimizer.param_groups[0]['lr']}"
+                     f"\t\tMulti-loss weight: {multi_task_loss.params}")
 
         # ==================================================================================================
         # 8. Validation and Testing
@@ -271,12 +271,13 @@ if __name__ == '__main__':
 
             validation_loss = np.mean(loss_list)
             logging.info(f"-------------------------------- Validation --------------------------------")
-            logging.info(f"Current epoch's mean loss: {validation_loss}")
+            logging.info(f"Current epoch's mean loss: {validation_loss}, best validation loss: {best_validation_loss}")
             if validation_loss < best_validation_loss:
                 best_validation_loss = validation_loss
+                current_patience = 0
             else:
                 current_patience += 1
-                if current_patience >= args.patience:
+                if current_patience >= args.patience and args.save_model:
                     # Save model
                     checkpoint = {
                         'model_state': TreeLSTM_model.state_dict(),
@@ -333,7 +334,7 @@ if __name__ == '__main__':
             acc1, acc5, acc10, acc20, mrr = get_performance(y_label_coo_numpy, y_pred_coo_numpy)
             logging.info(f" <coo> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}\tmrr: {mrr}")
 
-            if early_stopping_flag:
+            if early_stopping_flag and args.save_data:
                 pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
                 pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
                 break

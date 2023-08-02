@@ -164,7 +164,7 @@ def add_day_node(tree, trajectory, labels, index, nary):
         tree.add_edge(fake_node_id, node_id)
 
     day_trajectory = trajectory[index]
-    for i in range(len(day_trajectory)):  # Four time periods， 0-6， 7-12， 13-18， 19-24
+    for i in range(len(day_trajectory)):  # Four time periods， 0-6， 6-12， 12-18， 18-24
         period_node_id = add_period_node(tree, day_trajectory[i], nary)
         tree.add_edge(period_node_id, node_id)
 

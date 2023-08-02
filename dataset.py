@@ -134,7 +134,7 @@ class TrajectoryTestDataset(Dataset):
                 next_POI_idx, next_cat_idx = POI_id2idx_dict[next_pid], cat_id2idx_dict[next_cid]
                 features = [user_idx, POI_idx, cat_idx, coo]
                 tim_info = tim.hour * 4 + int(tim.minute / 15)  # Divide the time into time zones with 15-min intervals
-                if index == len(trajectory) - 2:
+                if index == len(trajectory) - 2:  # test node
                     labels = [next_POI_idx, next_cat_idx, next_coo]
                 else:
                     labels = [-1, -1, -1]
