@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 SSTBatch = collections.namedtuple(
-    "SSTBatch", ["graph", "features", "time", "label", "mask", "type"]
+    "SSTBatch", ["graph", "features", "time", "label", "mask", "mask2", "type"]
 )
 
 
@@ -119,73 +119,64 @@ def plot_tree(g):
     plt.show()
 
 
-def add_period_node(tree, trajectory, index, parent_node_id, nary):
+def add_true_node(tree, trajectory, index, parent_node_id, nary):
     for i in range(nary - 1, 0, -1):
         if index - i >= 0:
             node_id = tree.number_of_nodes()
             node = trajectory[index - i]
-            tree.add_node(node_id, x=node['features'], time=node['time'], y=node['labels'], mask=1, type=1)
+            tree.add_node(node_id, x=node['features'], time=node['time'], y=node['labels'], mask=1, mask2=0, type=1)
             tree.add_edge(node_id, parent_node_id)
         else:  # empty node
             node_id = tree.number_of_nodes()
-            tree.add_node(node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)
+            tree.add_node(node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, mask2=0, type=-1)
             tree.add_edge(node_id, parent_node_id)
 
+    sub_parent_node_id = tree.number_of_nodes()
+    tree.add_node(sub_parent_node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, mask2=0, type=-1)
+    tree.add_edge(sub_parent_node_id, parent_node_id)
 
-def add_day_node(tree, trajectory, labels, index, nary):
+    if index - (nary - 1) > 0:
+        add_true_node(tree, trajectory, index - (nary - 1), sub_parent_node_id, nary)
+        tree.add_node(sub_parent_node_id, x=[0] * 4, time=0, y=trajectory[index - (nary - 1)]['labels'], mask=0,
+                      mask2=0, type=-1)
+
+
+def add_period_node(tree, trajectory, nary):
     node_id = tree.number_of_nodes()
-    tree.add_node(node_id, x=[0] * 4, time=0, y=labels[index], mask=0, type=0)
-    if index > 0:  # recursion
-        child_node_id = add_day_node(tree, trajectory, labels, index - 1, nary)
-        tree.add_edge(child_node_id, node_id)
-    else:
-        empty_node_id = tree.number_of_nodes()
-        tree.add_node(empty_node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, type=0)
-        tree.add_edge(empty_node_id, node_id)
+    period_label = trajectory[len(trajectory) - 1]['labels'] if len(trajectory) > 0 else [-1] * 3
+    tree.add_node(node_id, x=[0] * 4, time=0, y=period_label, mask=0, mask2=1, type=-1)
 
-    add_period_node(tree, trajectory[index], len(trajectory[index]), node_id, nary)
+    if len(trajectory) > 0:
+        add_true_node(tree, trajectory, len(trajectory), node_id, nary)
 
     return node_id
 
 
-def add_children_out(tree, trajectory, index, idx2idx_dict, flag_dict, nary):
-    re_index = len(trajectory) - 1 - index
-    max_index = re_index
-    node = trajectory[re_index]
-    idx2idx_dict[index] = tree.number_of_nodes()
-    tree.add_node(idx2idx_dict[index], x=node['features'], time=node['time'], y=node['labels'], mask=1, type=0)
-
-    if index > 0 and flag_dict[index]:
-        flag_dict[index] = 0  # already play as parent node
-        for i in range(nary, 0, -1):
-            if index - i < 0:  # fictitious node
-                node_id = tree.number_of_nodes()
-                tree.add_node(node_id, x=node['features'], time=node['time'], y=[-1] * 3, mask=0, type=1)
-                tree.add_edge(node_id, idx2idx_dict[index])  # src -> dst
-                max_index = len(trajectory) - 1
-            else:
-                child_idx = add_children_out(tree, trajectory, index - i, idx2idx_dict, flag_dict, nary)
-                max_index = child_idx if max_index < child_idx else max_index
-                tree.add_edge(idx2idx_dict[index - i], idx2idx_dict[index])  # src -> dst
-
-    # change node label
-    tree.add_node(idx2idx_dict[index], x=node['features'], time=node['time'], y=trajectory[max_index]['labels'], mask=1,
-                  type=0)
-    return max_index
-
-
-def construct_MobilityTree(trajectory, labels, nary, need_plot, tree_type):
-    tree = nx.DiGraph()
-
-    if tree_type == 'in':  # in tree
-        add_day_node(tree, trajectory, labels, len(trajectory) - 1, nary)
-    elif tree_type == 'out':  # out tree
-        pass
+def add_day_node(tree, trajectory, labels, index, nary):
+    node_id = tree.number_of_nodes()
+    tree.add_node(node_id, x=[0] * 4, time=0, y=labels[index], mask=0, mask2=1, type=0)
+    if index > 0:  # recursion
+        child_node_id = add_day_node(tree, trajectory, labels, index - 1, nary)
+        tree.add_edge(child_node_id, node_id)
     else:
-        print("Tree type is wrong!")
+        fake_node_id = tree.number_of_nodes()
+        tree.add_node(fake_node_id, x=[0] * 4, time=0, y=[-1] * 3, mask=0, mask2=0, type=-1)
+        tree.add_edge(fake_node_id, node_id)
+
+    day_trajectory = trajectory[index]
+    for i in range(len(day_trajectory)):  # Four time periods， 0-6， 6-12， 12-18， 18-24
+        period_node_id = add_period_node(tree, day_trajectory[i], nary)
+        tree.add_edge(period_node_id, node_id)
+
+    return node_id
+
+
+def construct_MobilityTree(trajectory, labels, nary, need_plot):
+    tree = nx.DiGraph()
+    add_day_node(tree, trajectory, labels, len(trajectory) - 1, nary)
 
     if need_plot:
         plot_tree(tree)  # optional
 
-    dgl_tree = dgl.from_networkx(tree, node_attrs=['x', 'time', 'y', 'mask', 'type'])
+    dgl_tree = dgl.from_networkx(tree, node_attrs=['x', 'time', 'y', 'mask', 'mask2', 'type'])
     return dgl_tree

@@ -55,7 +55,7 @@ if __name__ == '__main__':
     print('\n' + '=' * 36 + ' Prepare data ' + '=' * 36)
     # Load data
     train_df = pd.read_csv(f'dataset/{args.dataset}/{args.dataset}_train.csv')
-    # val_df = pd.read_csv(f'dataset/{args.dataset}/{args.dataset}_val.csv')
+    val_df = pd.read_csv(f'dataset/{args.dataset}/{args.dataset}_val.csv')
     test_df = pd.read_csv(f'dataset/{args.dataset}/{args.dataset}_test.csv')
 
     # with open('dataset/NYC/NYC_train.csv', 'r') as f:
@@ -101,7 +101,7 @@ if __name__ == '__main__':
 
     if args.dataset == 'Gowalla-CA':
         train_df = process_for_GowallaCA(train_df)
-        # val_df = process_for_GowallaCA(val_df)
+        val_df = process_for_GowallaCA(val_df)
         test_df = process_for_GowallaCA(test_df)
 
     # User id to index
@@ -120,6 +120,8 @@ if __name__ == '__main__':
     kmeans_train = KMeans(n_clusters=args.K_cluster)
     kmeans_train.fit(data_train)
     train_df['coo_label'] = kmeans_train.labels_
+    data_val = np.column_stack((val_df['longitude'], val_df['latitude']))
+    val_df['coo_label'] = kmeans_train.predict(data_val)
     data_test = np.column_stack((test_df['longitude'], test_df['latitude']))
     test_df['coo_label'] = kmeans_train.predict(data_test)
 
@@ -131,13 +133,13 @@ if __name__ == '__main__':
     # Build dataset
     map_set = (user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict)
     train_dataset = TrajectoryTrainDataset(train_df, map_set)
-    # val_dataset = TrajectoryValDataset(val_df, map_set)
+    val_dataset = TrajectoryValDataset(val_df, map_set)
     test_dataset = TrajectoryTestDataset(test_df, map_set)
-    train_batch_size = int(args.batch_size / args.accumulation_steps)
-    train_dataloader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, drop_last=False,
+    batch_size = int(args.batch_size / args.accumulation_steps)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False,
                                   pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
-    # val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False,
-    #                             pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
+    val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=False,
+                                pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
     test_dataloader = DataLoader(test_dataset, batch_size=128, shuffle=False, drop_last=False,
                                  pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
 
@@ -178,51 +180,41 @@ if __name__ == '__main__':
     logging.info(f"\n{optimizer}")
 
     # ==================================================================================================
-    # 7. Training and validation
+    # 7. Training
     # ==================================================================================================
     print('\n' + '=' * 36 + ' Start training ' + '=' * 36)
+
+    current_patience = 0
+    best_validation_loss = float('inf')
+    early_stopping_flag = False
+
     # Training loop
     for epoch in range(args.epochs):
         TreeLSTM_model.train()
-        TreeLSTM_model.cell.train()
-        # TreeLSTM_model.cell_o.train()
+        TreeLSTM_model.cell_IAC.train()
+        TreeLSTM_model.cell_IRC.train()
         multi_task_loss.train()
 
         loss_list = []
 
         for b_idx, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc="Training"):
-            in_tree_batcher, out_tree_batcher = [], []
+            MT_batcher = []
             for trajectory, label in batch:
-                traj_in_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree, 'in')
-                in_tree_batcher.append(traj_in_tree.to(args.device))
-                # traj_out_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree, 'out')
-                # out_tree_batcher.append(traj_out_tree.to(args.device))
+                mobility_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree)
+                MT_batcher.append(mobility_tree.to(args.device))
 
-            in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
-            in_trees = SSTBatch(graph=in_tree_batch,
-                                features=in_tree_batch.ndata["x"].to(args.device),
-                                time=in_tree_batch.ndata["time"].to(args.device),
-                                label=in_tree_batch.ndata["y"].to(args.device),
-                                mask=in_tree_batch.ndata["mask"].to(args.device),
-                                type=in_tree_batch.ndata["type"].to(args.device))
-            # out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
-            # out_trees = SSTBatch(graph=out_tree_batch,
-            #                      features=out_tree_batch.ndata["x"].to(args.device),
-            #                      time=out_tree_batch.ndata["time"].to(args.device),
-            #                      label=out_tree_batch.ndata["y"].to(args.device),
-            #                      mask=out_tree_batch.ndata["mask"].to(args.device),
-            #                      type=out_tree_batch.ndata["type"].to(args.device))
+            MT_batch = dgl.batch(MT_batcher).to(args.device)
+            MT_input = SSTBatch(graph=MT_batch,
+                                features=MT_batch.ndata["x"].to(args.device),
+                                time=MT_batch.ndata["time"].to(args.device),
+                                label=MT_batch.ndata["y"].to(args.device),
+                                mask=MT_batch.ndata["mask"].to(args.device),
+                                mask2=MT_batch.ndata["mask2"].to(args.device),
+                                type=MT_batch.ndata["type"].to(args.device))
 
-            # y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
-            #     TreeLSTM_model(in_trees, out_trees)
-            y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(in_trees)
+            y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(MT_input)
+            y_POI, y_cat, y_coo = MT_input.label[:, 0], MT_input.label[:, 1], MT_input.label[:, 2]
 
-            y_POI, y_cat, y_coo = in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2]
-            # y_POI_o, y_cat_o, y_coo_o = out_trees.label[:, 0], out_trees.label[:, 1], out_trees.label[:, 2]
-
-            # loss_POI = criterion_POI(y_pred_POI, y_POI.long()) + criterion_POI(y_pred_POI_o, y_POI_o.long())
-            # loss_cat = criterion_cat(y_pred_cat, y_cat.long()) + criterion_cat(y_pred_cat_o, y_cat_o.long())
-            # loss_coo = criterion_coo(y_pred_coo, y_coo.long()) + criterion_coo(y_pred_coo_o, y_coo_o.long())
             loss_POI = criterion_POI(y_pred_POI, y_POI.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long())
             loss_coo = criterion_coo(y_pred_coo, y_coo.long())
@@ -239,85 +231,99 @@ if __name__ == '__main__':
 
         # Logging
         logging.info(f"************************  Training epoch: {epoch + 1}/{args.epochs}  ************************")
-        logging.info(f"Current epoch's mean loss: {np.mean(loss_list)}\t\tlr: {optimizer.param_groups[0]['lr']}"
-                     f"\nloss weight: {multi_task_loss.params}")
+        logging.info(f"Current epoch's mean loss: {np.mean(loss_list)}\t\tLr: {optimizer.param_groups[0]['lr']}"
+                     f"\t\tMulti-loss weight: {multi_task_loss.params}")
 
-        # Save model
-        if (epoch + 1) % 5 == 0 and epoch >= 80:
-            checkpoint = {
-                'model_state': TreeLSTM_model.state_dict(),
-                'multi_task_loss_state': multi_task_loss.state_dict(),
-                'optimizer_state': optimizer.state_dict(),
-                'lr_scheduler_state': lr_scheduler.state_dict()
-            }
-            torch.save(checkpoint, os.path.join(save_dir, f"checkpoint_{epoch + 1}.pth"))
-
-        # if (epoch + 1) % 10 == 0:
         # ==================================================================================================
-        # 8. Testing
+        # 8. Validation and Testing
         # ==================================================================================================
         TreeLSTM_model.eval()
-        TreeLSTM_model.cell.eval()
-        # TreeLSTM_model.cell_o.eval()
+        TreeLSTM_model.cell_IAC.eval()
+        TreeLSTM_model.cell_IRC.eval()
         multi_task_loss.eval()
 
         with torch.no_grad():
+            # ==================================================================================================
+            # 8.1 Validation
+            # ==================================================================================================
+            loss_list = []
+
+            for batch in val_dataloader:
+                MT_batcher = []
+                for trajectory, label in batch:
+                    mobility_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree)
+                    MT_batcher.append(mobility_tree.to(args.device))
+
+                MT_batch = dgl.batch(MT_batcher).to(args.device)
+                MT_input = SSTBatch(graph=MT_batch,
+                                    features=MT_batch.ndata["x"].to(args.device),
+                                    time=MT_batch.ndata["time"].to(args.device),
+                                    label=MT_batch.ndata["y"].to(args.device),
+                                    mask=MT_batch.ndata["mask"].to(args.device),
+                                    mask2=MT_batch.ndata["mask2"].to(args.device),
+                                    type=MT_batch.ndata["type"].to(args.device))
+
+                y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(MT_input)
+                y_POI, y_cat, y_coo = MT_input.label[:, 0], MT_input.label[:, 1], MT_input.label[:, 2]
+
+                loss = criterion_POI(y_pred_POI, y_POI.long())
+                loss_list.append(loss.item())
+
+            validation_loss = np.mean(loss_list)
+            logging.info(f"-------------------------------- Validation --------------------------------")
+            logging.info(f"Current epoch's mean loss: {validation_loss}, best validation loss: {best_validation_loss}")
+            if validation_loss < best_validation_loss:
+                best_validation_loss = validation_loss
+                current_patience = 0
+            else:
+                current_patience += 1
+                if current_patience >= args.patience and args.save_model:
+                    # Save model
+                    checkpoint = {
+                        'model_state': TreeLSTM_model.state_dict(),
+                        'multi_task_loss_state': multi_task_loss.state_dict(),
+                        'optimizer_state': optimizer.state_dict(),
+                        'lr_scheduler_state': lr_scheduler.state_dict()
+                    }
+                    torch.save(checkpoint, os.path.join(save_dir, f"checkpoint_{epoch + 1}.pth"))
+                    logging.info(f"Early stopping at epoch {epoch + 1}...")
+                    early_stopping_flag = True
+
+            # ==================================================================================================
+            # 8.2 Testing
+            # ==================================================================================================
             y_pred_POI_list, y_label_POI_list = [], []
             y_pred_cat_list, y_label_cat_list = [], []
             y_pred_coo_list, y_label_coo_list = [], []
             # Start testing
             for batch in test_dataloader:
-                in_tree_batcher, out_tree_batcher = [], []
+                MT_batcher = []
                 for trajectory, label in batch:
-                    traj_in_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree, 'in')
-                    in_tree_batcher.append(traj_in_tree.to(args.device))
-                    # traj_out_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree, 'out')
-                    # out_tree_batcher.append(traj_out_tree.to(args.device))
+                    mobility_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree)
+                    MT_batcher.append(mobility_tree.to(args.device))
 
-                in_tree_batch = dgl.batch(in_tree_batcher).to(args.device)
-                in_trees = SSTBatch(graph=in_tree_batch,
-                                    features=in_tree_batch.ndata["x"].to(args.device),
-                                    time=in_tree_batch.ndata["time"].to(args.device),
-                                    label=in_tree_batch.ndata["y"].to(args.device),
-                                    mask=in_tree_batch.ndata["mask"].to(args.device),
-                                    type=in_tree_batch.ndata["type"].to(args.device))
-                # out_tree_batch = dgl.batch(out_tree_batcher).to(args.device)
-                # out_trees = SSTBatch(graph=out_tree_batch,
-                #                      features=out_tree_batch.ndata["x"].to(args.device),
-                #                      time=out_tree_batch.ndata["time"].to(args.device),
-                #                      label=out_tree_batch.ndata["y"].to(args.device),
-                #                      mask=out_tree_batch.ndata["mask"].to(args.device),
-                #                      type=out_tree_batch.ndata["type"].to(args.device))
+                MT_batch = dgl.batch(MT_batcher).to(args.device)
+                MT_input = SSTBatch(graph=MT_batch,
+                                    features=MT_batch.ndata["x"].to(args.device),
+                                    time=MT_batch.ndata["time"].to(args.device),
+                                    label=MT_batch.ndata["y"].to(args.device),
+                                    mask=MT_batch.ndata["mask"].to(args.device),
+                                    mask2=MT_batch.ndata["mask2"].to(args.device),
+                                    type=MT_batch.ndata["type"].to(args.device))
 
-                # y_pred_POI, y_pred_cat, y_pred_coo, y_pred_POI_o, y_pred_cat_o, y_pred_coo_o = \
-                #     TreeLSTM_model(in_trees, out_trees)
-                y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(in_trees)
+                y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(MT_input)
+                y_POI, y_cat, y_coo = MT_input.label[:, 0], MT_input.label[:, 1], MT_input.label[:, 2]
 
-                y_POI, y_cat, y_coo = in_trees.label[:, 0], in_trees.label[:, 1], in_trees.label[:, 2]
-
-                # alpha = 0.5
-                # y_pred_POI_all = alpha * y_pred_POI + (1 - alpha) * y_pred_POI_o
-                # y_pred_POI_all = y_pred_POI + y_pred_POI_o
-                # y_pred_cat_all = y_pred_cat + y_pred_cat_o
-                # y_pred_coo_all = y_pred_coo + y_pred_coo_o
-                y_pred_POI_all = y_pred_POI
-                y_pred_cat_all = y_pred_cat
-                y_pred_coo_all = y_pred_coo
-
-                y_pred_POI_list.append(y_pred_POI_all.detach().cpu().numpy())
+                y_pred_POI_list.append(y_pred_POI.detach().cpu().numpy())
                 y_label_POI_list.append(y_POI.detach().cpu().numpy())
-                y_pred_cat_list.append(y_pred_cat_all.detach().cpu().numpy())
+                y_pred_cat_list.append(y_pred_cat.detach().cpu().numpy())
                 y_label_cat_list.append(y_cat.detach().cpu().numpy())
-                y_pred_coo_list.append(y_pred_coo_all.detach().cpu().numpy())
+                y_pred_coo_list.append(y_pred_coo.detach().cpu().numpy())
                 y_label_coo_list.append(y_coo.detach().cpu().numpy())
 
             y_label_POI_numpy, y_pred_POI_numpy = get_pred_label(y_label_POI_list, y_pred_POI_list)
             y_label_cat_numpy, y_pred_cat_numpy = get_pred_label(y_label_cat_list, y_pred_cat_list)
             y_label_coo_numpy, y_pred_coo_numpy = get_pred_label(y_label_coo_list, y_pred_coo_list)
-
-            if epoch >= 80:
-                pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
-                pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
 
             # Logging
             logging.info(f"================================ Testing ================================")
@@ -327,3 +333,8 @@ if __name__ == '__main__':
             logging.info(f" <cat> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}\tmrr: {mrr}")
             acc1, acc5, acc10, acc20, mrr = get_performance(y_label_coo_numpy, y_pred_coo_numpy)
             logging.info(f" <coo> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}\tmrr: {mrr}")
+
+            if early_stopping_flag and args.save_data:
+                pickle.dump(y_pred_POI_numpy, open(os.path.join(save_dir, f"recommendation_list_{epoch + 1}"), 'wb'))
+                pickle.dump(y_label_POI_numpy, open(os.path.join(save_dir, f"ground_truth_{epoch + 1}"), 'wb'))
+                break
