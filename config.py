@@ -97,6 +97,10 @@ def get_args():
                         type=float,
                         default=1e-4,
                         help='Weight decay (L2 loss on parameters)')
+    parser.add_argument('--patience',
+                        type=int,
+                        default=3,
+                        help='the patience for early stopping')
 
     # Experiment configuration
     parser.add_argument('--plot_tree',

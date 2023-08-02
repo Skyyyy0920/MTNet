@@ -53,6 +53,7 @@ class TrajectoryValDataset(Dataset):
     def __init__(self, data_df, map_set):
         user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict = map_set
         self.trajectories = {}
+        self.labels = {}
 
         data_df['user_id'] = data_df['user_id'].astype(str)
         data_df = data_df[data_df['user_id'].isin(user_id2idx_dict.keys())]
@@ -68,7 +69,9 @@ class TrajectoryValDataset(Dataset):
             user_idx = user_id2idx_dict[user_id]
             traj_idx = len(self.trajectories)
             self.trajectories[traj_idx] = []
-            start_date = trajectory.iloc[0]['local_time']
+            self.labels[traj_idx] = []
+            cur_day_of_year = trajectory.iloc[0]['local_time'].day_of_year
+            self.trajectories[traj_idx].append([[], [], [], []])
 
             for index in range(len(trajectory) - 1):
                 _, pid, cid, _, _, _, _, _, _, tim, _, _, _, _, _, coo = trajectory.iloc[index]
@@ -76,13 +79,20 @@ class TrajectoryValDataset(Dataset):
                 POI_idx, cat_idx = POI_id2idx_dict[pid], cat_id2idx_dict[cid]
                 next_POI_idx, next_cat_idx = POI_id2idx_dict[next_pid], cat_id2idx_dict[next_cid]
                 features = [user_idx, POI_idx, cat_idx, coo]
-                tim_info = int((tim - start_date).days * 24 + (tim - start_date).seconds / 60 / 60)
+                tim_info = tim.hour * 4 + int(tim.minute / 15)  # Divide the time into time zones with 15-min intervals
                 if index == len(trajectory) - 2:
                     labels = [next_POI_idx, next_cat_idx, next_coo]
                 else:
                     labels = [-1, -1, -1]
-                checkin = {'features': features, 'time': tim_info, 'labels': labels}
-                self.trajectories[traj_idx].append(checkin)
+                checkin = {'features': features, 'time': tim_info, 'labels': [-1, -1, -1]}
+                if next_tim.day_of_year != tim.day_of_year or index == len(trajectory) - 2:
+                    self.labels[traj_idx].append(labels)
+                if tim.day_of_year == cur_day_of_year:
+                    self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1][int(tim.hour / 6)].append(checkin)
+                else:
+                    cur_day_of_year = tim.day_of_year
+                    self.trajectories[traj_idx].append([[], [], [], []])
+                    self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1][int(tim.hour / 6)].append(checkin)
 
         print(f"Validation dataset length: ", len(self.trajectories))
 
@@ -90,7 +100,7 @@ class TrajectoryValDataset(Dataset):
         return len(self.trajectories)
 
     def __getitem__(self, item):
-        return self.trajectories[item]
+        return self.trajectories[item], self.labels[item]
 
 
 class TrajectoryTestDataset(Dataset):
