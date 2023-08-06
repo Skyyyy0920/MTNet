@@ -12,8 +12,10 @@ This is the implementation for our paper [Mobility Tree Network for Next POI Rec
 pip install -r requirements.txt
 ```
 
-## Training
-...
+## Training, Validation and Testing
+- Adjust the configuration in `config.py`  
+- Run `main.py`
 
-## Validation
-...
+## FAQ
+- Q: How about the total running time?    
+  A: NYC dataset runs for about 1 hour on NVIDIA GeForce RTX 2060. For Gowalla and TKY datasets, this time is about 2.5 hours.
