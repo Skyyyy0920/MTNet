@@ -140,7 +140,7 @@ if __name__ == '__main__':
                                   pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, drop_last=False,
                                 pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
-    test_dataloader = DataLoader(test_dataset, batch_size=128, shuffle=False, drop_last=False,
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False,
                                  pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
 
     # ==================================================================================================

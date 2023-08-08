@@ -134,7 +134,7 @@ class TreeLSTM(nn.Module):
                             reduce_func=self.cell_IAC.reduce_func,
                             apply_node_func=self.cell_IAC.apply_node_func)
 
-        h_1 = self.model_dropout(g.ndata["h"])  # [batch_size, h_size]
+        h_1 = g.ndata["h"]  # [batch_size, h_size]
         g.ndata["x"] = h_1 * MT_input.mask2.float().unsqueeze(-1)
 
         dgl.prop_nodes_topo(graph=g,
