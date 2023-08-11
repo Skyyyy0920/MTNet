@@ -202,6 +202,11 @@ if __name__ == '__main__':
 
         loss_list = []
 
+        h_2_save, label_save = {}, {}
+        for i in range(3):
+            h_2_save[i] = np.empty((0, 512), dtype=np.float32)
+            label_save[i] = []
+
         for b_idx, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc="Training"):
             MT_batcher = []
             for trajectory, label in batch:
@@ -217,8 +222,13 @@ if __name__ == '__main__':
                                 mask2=MT_batch.ndata["mask2"].to(args.device),
                                 type=MT_batch.ndata["type"].to(args.device))
 
-            y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(MT_input, epoch)
+            y_pred_POI, y_pred_cat, y_pred_coo, h_2_out, label_out = TreeLSTM_model(MT_input, epoch)
             y_POI, y_cat, y_coo = MT_input.label[:, 0], MT_input.label[:, 1], MT_input.label[:, 2]
+
+            for i in range(3):
+                if i in h_2_out.keys():
+                    h_2_save[i] = np.vstack((h_2_save[i], h_2_out[i]))
+                    label_save[i].append(label_out[i])
 
             loss_POI = criterion_POI(y_pred_POI, y_POI.long())
             loss_cat = criterion_cat(y_pred_cat, y_cat.long())
@@ -233,6 +243,12 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
 
         lr_scheduler.step()  # update learning rate
+
+        if epoch >= 0:
+            for i in range(3):
+                label_save[i] = np.concatenate(label_save[i])
+                np.save(rf'{i}_h2.npy', h_2_save[i])
+                np.save(rf'{i}_category.npy', label_save[i])
 
         # Logging
         logging.info(f"************************  Training epoch: {epoch + 1}/{args.epochs}  ************************")
@@ -268,7 +284,7 @@ if __name__ == '__main__':
                                     mask2=MT_batch.ndata["mask2"].to(args.device),
                                     type=MT_batch.ndata["type"].to(args.device))
 
-                y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(MT_input)
+                y_pred_POI, y_pred_cat, y_pred_coo, _, _ = TreeLSTM_model(MT_input)
                 y_POI, y_cat, y_coo = MT_input.label[:, 0], MT_input.label[:, 1], MT_input.label[:, 2]
 
                 loss = criterion_POI(y_pred_POI, y_POI.long())
@@ -317,7 +333,7 @@ if __name__ == '__main__':
                                     mask2=MT_batch.ndata["mask2"].to(args.device),
                                     type=MT_batch.ndata["type"].to(args.device))
 
-                y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(MT_input)
+                y_pred_POI, y_pred_cat, y_pred_coo, _, _ = TreeLSTM_model(MT_input)
                 y_POI, y_cat, y_coo = MT_input.label[:, 0], MT_input.label[:, 1], MT_input.label[:, 2]
 
                 y_pred_POI_list.append(y_pred_POI.detach().cpu().numpy())

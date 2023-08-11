@@ -146,19 +146,20 @@ class TreeLSTM(nn.Module):
         user_id = MT_input.features[:, 0].long()
         trajectory_id = MT_input.features[:, 4].long()
         category = MT_input.features[:, 5].long()
-        if epoch >= 25:
-            target_user = [1, 2, 3]
-            for tar in target_user:
-                if tar in trajectory_id:
-                    row_indices1 = torch.where(trajectory_id == tar)[0].cpu()
+        h_2_out, label_out = {}, {}
+        if epoch >= 0:
+            target_user = [811, 1128, 1889]
+            for i in range(len(target_user)):
+                tar = target_user[i]
+                if tar in user_id:
+                    row_indices1 = torch.where(user_id == tar)[0].cpu()
                     row_indices2 = torch.where(category != 0)[0].cpu()
                     row_indices = torch.tensor([idx for idx in row_indices1 if idx in row_indices2])
                     h_1_save = h_1[row_indices].detach().cpu().numpy()
                     h_2_save = g.ndata["h"][row_indices].detach().cpu().numpy()
                     label_save = category[row_indices].detach().cpu().numpy()
-                    np.save(rf'{tar}_h1.npy', h_1_save)
-                    np.save(rf'{tar}_h2.npy', h_2_save)
-                    np.save(rf'{tar}_category.npy', label_save)
+                    h_2_out[i] = h_2_save
+                    label_out[i] = label_save
 
         h_2 = self.model_dropout(g.ndata["h"])  # [batch_size, h_size]
 
@@ -166,7 +167,7 @@ class TreeLSTM(nn.Module):
         y_pred_cat = self.decoder_cat(h_2)
         y_pred_coo = self.decoder_coo(h_2)
 
-        return y_pred_POI, y_pred_cat, y_pred_coo
+        return y_pred_POI, y_pred_cat, y_pred_coo, h_2_out, label_out
 
 
 class MultiTaskLoss(nn.Module):
