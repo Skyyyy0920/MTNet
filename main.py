@@ -116,6 +116,11 @@ if __name__ == '__main__':
     cat_list.sort()
     cat_id2idx_dict = dict(zip(cat_list, range(len(cat_list))))
 
+    user_counts = train_df['user_id'].value_counts()
+    top_ten_users = user_counts.head(10)
+    for user, counts in top_ten_users.items():
+        print(user_id2idx_dict[str(user)], counts)
+
     data_train = np.column_stack((train_df['longitude'], train_df['latitude']))
     kmeans_train = KMeans(n_clusters=args.K_cluster)
     kmeans_train.fit(data_train)
@@ -212,7 +217,7 @@ if __name__ == '__main__':
                                 mask2=MT_batch.ndata["mask2"].to(args.device),
                                 type=MT_batch.ndata["type"].to(args.device))
 
-            y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(MT_input)
+            y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(MT_input, epoch)
             y_POI, y_cat, y_coo = MT_input.label[:, 0], MT_input.label[:, 1], MT_input.label[:, 2]
 
             loss_POI = criterion_POI(y_pred_POI, y_POI.long())
