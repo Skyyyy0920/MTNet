@@ -203,7 +203,7 @@ if __name__ == '__main__':
         loss_list = []
 
         h_2_save, label_save = {}, {}
-        for i in range(3):
+        for i in range(10):
             h_2_save[i] = np.empty((0, 512), dtype=np.float32)
             label_save[i] = []
 
@@ -225,7 +225,7 @@ if __name__ == '__main__':
             y_pred_POI, y_pred_cat, y_pred_coo, h_2_out, label_out = TreeLSTM_model(MT_input, epoch)
             y_POI, y_cat, y_coo = MT_input.label[:, 0], MT_input.label[:, 1], MT_input.label[:, 2]
 
-            for i in range(3):
+            for i in range(10):
                 if i in h_2_out.keys():
                     h_2_save[i] = np.vstack((h_2_save[i], h_2_out[i]))
                     label_save[i].append(label_out[i])
@@ -245,7 +245,7 @@ if __name__ == '__main__':
         lr_scheduler.step()  # update learning rate
 
         if epoch >= 0:
-            for i in range(3):
+            for i in range(10):
                 label_save[i] = np.concatenate(label_save[i])
                 np.save(rf'{i}_h2.npy', h_2_save[i])
                 np.save(rf'{i}_category.npy', label_save[i])

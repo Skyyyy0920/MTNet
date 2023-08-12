@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 from pathlib import Path
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -144,7 +144,11 @@ def add_true_node(tree, trajectory, index, parent_node_id, nary):
 def add_period_node(tree, trajectory, nary):
     node_id = tree.number_of_nodes()
     period_label = trajectory[len(trajectory) - 1]['labels'] if len(trajectory) > 0 else [-1] * 3
-    tree.add_node(node_id, x=[0] * 6, time=0, y=period_label, mask=0, mask2=1, type=-1)
+    if len(trajectory) > 0:
+        x = trajectory[0]['features']
+    else:
+        x = [0] * 6
+    tree.add_node(node_id, x=x, time=0, y=period_label, mask=0, mask2=1, type=-2)
 
     if len(trajectory) > 0:
         add_true_node(tree, trajectory, len(trajectory), node_id, nary)
