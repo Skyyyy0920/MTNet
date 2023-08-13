@@ -230,9 +230,10 @@ if __name__ == '__main__':
         lr_scheduler.step()  # update learning rate
 
         # Logging
-        logging.info(f"************************  Training epoch: {epoch + 1}/{args.epochs}  ************************")
-        logging.info(f"Current epoch's mean loss: {np.mean(loss_list)}\t\tLr: {optimizer.param_groups[0]['lr']}"
-                     f"\t\tMulti-loss weight: {multi_task_loss.params}")
+        logging.info(
+            f"*****************************  Training epoch: {epoch + 1}/{args.epochs}  ****************************")
+        logging.info(f"Current epoch's mean loss: {np.mean(loss_list):.4f}"
+                     f"\t\tLr: {optimizer.param_groups[0]['lr']:.4f}\t\tMulti-loss weight: {multi_task_loss.params}")
 
         # ==================================================================================================
         # 8. Validation and Testing
@@ -270,8 +271,9 @@ if __name__ == '__main__':
                 loss_list.append(loss.item())
 
             validation_loss = np.mean(loss_list)
-            logging.info(f"-------------------------------- Validation --------------------------------")
-            logging.info(f"Current epoch's mean loss: {validation_loss}, best validation loss: {best_validation_loss}")
+            logging.info(f"----------------------------------  Validation  ---------------------------------")
+            logging.info(f"Current epoch's mean loss: {validation_loss:.4f}, "
+                         f"best validation loss: {best_validation_loss:.4f}")
             if validation_loss < best_validation_loss:
                 best_validation_loss = validation_loss
                 current_patience = 0
@@ -327,13 +329,16 @@ if __name__ == '__main__':
             y_label_coo_numpy, y_pred_coo_numpy = get_pred_label(y_label_coo_list, y_pred_coo_list)
 
             # Logging
-            logging.info(f"================================ Testing ================================")
+            logging.info(f"===================================  Testing  ===================================")
             acc1, acc5, acc10, acc20, mrr = get_performance(y_label_POI_numpy, y_pred_POI_numpy)
-            logging.info(f" <POI> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}\tmrr: {mrr}")
+            logging.info(f" <POI> acc@1: {acc1:.4f}\tacc@5: {acc5:.4f}"
+                         f"\tacc@10: {acc10:.4f}\tacc@20: {acc20:.4f}\tmrr: {mrr:.4f}")
             acc1, acc5, acc10, acc20, mrr = get_performance(y_label_cat_numpy, y_pred_cat_numpy)
-            logging.info(f" <cat> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}\tmrr: {mrr}")
+            logging.info(f" <cat> acc@1: {acc1:.4f}\tacc@5: {acc5:.4f}"
+                         f"\tacc@10: {acc10:.4f}\tacc@20: {acc20:.4f}\tmrr: {mrr:.4f}")
             acc1, acc5, acc10, acc20, mrr = get_performance(y_label_coo_numpy, y_pred_coo_numpy)
-            logging.info(f" <coo> acc@1: {acc1}\tacc@5: {acc5}\tacc@10: {acc10}\tacc@20: {acc20}\tmrr: {mrr}")
+            logging.info(f" <coo> acc@1: {acc1:.4f}\tacc@5: {acc5:.4f}"
+                         f"\tacc@10: {acc10:.4f}\tacc@20: {acc20:.4f}\tmrr: {mrr:.4f}")
 
             if early_stopping_flag:
                 if args.save_data:
