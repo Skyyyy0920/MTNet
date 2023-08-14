@@ -141,7 +141,7 @@ def add_true_node(tree, trajectory, index, parent_node_id, nary):
                       mask2=0, type=-1)
 
 
-def add_period_node(tree, trajectory, nary, pos, index):
+def add_period_node(tree, trajectory, nary):
     node_id = tree.number_of_nodes()
     period_label = trajectory[len(trajectory) - 1]['labels'] if len(trajectory) > 0 else [-1] * 3
     tree.add_node(node_id, x=[0] * 4, time=0, y=period_label, mask=0, mask2=1, type=1)
@@ -165,7 +165,7 @@ def add_day_node(tree, trajectory, labels, index, nary):
 
     day_trajectory = trajectory[index]
     for i in range(len(day_trajectory)):  # Four time periods， 0-6， 6-12， 12-18， 18-24
-        period_node_id = add_period_node(tree, day_trajectory[i], nary, i, index)
+        period_node_id = add_period_node(tree, day_trajectory[i], nary)
         tree.add_edge(period_node_id, node_id)
 
     return node_id

@@ -81,7 +81,7 @@ class InterHierarchyCommunication(nn.Module):
 
 class TreeLSTM(nn.Module):
     def __init__(self,
-                 h_size=512, nary=3,
+                 h_size=512, nary=5,
                  embed_dropout=0.2, model_dropout=0.4,
                  num_users=3000, user_embed_dim=128,
                  num_POIs=5000, POI_embed_dim=128,

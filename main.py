@@ -25,14 +25,14 @@ if __name__ == '__main__':
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
     logging_time = time.strftime('%m-%d_%H-%M', time.localtime())
-    save_dir = os.path.join(args.save_path, f"{args.dataset}_{args.nary}-ary_{logging_time}")
+    save_dir = os.path.join(args.save_path, f"{args.dataset}_{args.time_slices}-slices_{logging_time}")
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     print(f"Saving path: {save_dir}")
     logging.basicConfig(level=logging.INFO,
                         format='[%(asctime)s %(levelname)s]%(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S',
-                        filename=os.path.join(save_dir, f'{args.dataset}_{args.nary}.log'))
+                        filename=os.path.join(save_dir, f'{args.dataset}_{args.time_slices}.log'))
     console = logging.StreamHandler()  # Simultaneously output to console
     console.setLevel(logging.INFO)
     console.setFormatter(logging.Formatter(fmt='[%(asctime)s %(levelname)s]%(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
@@ -91,9 +91,9 @@ if __name__ == '__main__':
 
     # Build dataset
     map_set = (user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict)
-    train_dataset = TrajectoryTrainDataset(train_df, map_set)
-    val_dataset = TrajectoryValDataset(val_df, map_set)
-    test_dataset = TrajectoryTestDataset(test_df, map_set)
+    train_dataset = TrajectoryTrainDataset(train_df, map_set, args.time_slices)
+    val_dataset = TrajectoryValDataset(val_df, map_set, args.time_slices)
+    test_dataset = TrajectoryTestDataset(test_df, map_set, args.time_slices)
     batch_size = int(args.batch_size / args.accumulation_steps)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False,
                                   pin_memory=True, num_workers=args.workers, collate_fn=lambda x: x)
@@ -107,7 +107,7 @@ if __name__ == '__main__':
     # ==================================================================================================
     print('\n' + '=' * 36 + ' Build models ' + '=' * 36)
 
-    TreeLSTM_model = TreeLSTM(h_size=args.h_size, nary=args.nary,
+    TreeLSTM_model = TreeLSTM(h_size=args.h_size, nary=args.time_slices + 1,
                               embed_dropout=args.embed_dropout, model_dropout=args.model_dropout,
                               num_users=num_users, user_embed_dim=args.user_embed_dim,
                               num_POIs=num_POIs, POI_embed_dim=args.POI_embed_dim,
@@ -159,7 +159,7 @@ if __name__ == '__main__':
         for b_idx, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader), desc="Training"):
             MT_batcher = []
             for trajectory, label in batch:
-                mobility_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree)
+                mobility_tree = construct_MobilityTree(trajectory, label, args.time_slices + 1, args.plot_tree)
                 MT_batcher.append(mobility_tree.to(args.device))
 
             MT_batch = dgl.batch(MT_batcher).to(args.device)
@@ -211,7 +211,7 @@ if __name__ == '__main__':
             for batch in val_dataloader:
                 MT_batcher = []
                 for trajectory, label in batch:
-                    mobility_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree)
+                    mobility_tree = construct_MobilityTree(trajectory, label, args.time_slices + 1, args.plot_tree)
                     MT_batcher.append(mobility_tree.to(args.device))
 
                 MT_batch = dgl.batch(MT_batcher).to(args.device)
@@ -261,7 +261,7 @@ if __name__ == '__main__':
             for batch in test_dataloader:
                 MT_batcher = []
                 for trajectory, label in batch:
-                    mobility_tree = construct_MobilityTree(trajectory, label, args.nary, args.plot_tree)
+                    mobility_tree = construct_MobilityTree(trajectory, label, args.time_slices + 1, args.plot_tree)
                     MT_batcher.append(mobility_tree.to(args.device))
 
                 MT_batch = dgl.batch(MT_batcher).to(args.device)

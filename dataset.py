@@ -4,7 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class TrajectoryTrainDataset(Dataset):
-    def __init__(self, data_df, map_set):
+    def __init__(self, data_df, map_set, time_slices):
         user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict = map_set
         self.trajectories = {}
         self.labels = {}
@@ -20,7 +20,7 @@ class TrajectoryTrainDataset(Dataset):
             self.trajectories[traj_idx] = []
             self.labels[traj_idx] = []
             cur_day_of_year = trajectory.iloc[0]['local_time'].day_of_year
-            self.trajectories[traj_idx].append([[], [], [], [], [], [], [], []])
+            self.trajectories[traj_idx].append([[] for _ in range(time_slices)])
 
             for index in range(len(trajectory) - 1):
                 _, pid, cid, _, _, _, _, _, _, tim, _, _, _, _, _, coo = trajectory.iloc[index]
@@ -34,11 +34,11 @@ class TrajectoryTrainDataset(Dataset):
                 if next_tim.day_of_year != tim.day_of_year or index == len(trajectory) - 2:
                     self.labels[traj_idx].append(labels)
                 if tim.day_of_year == cur_day_of_year:
-                    self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1][int(tim.hour / 3)].append(checkin)
+                    self.trajectories[traj_idx][-1][int(tim.hour / int(24 / time_slices))].append(checkin)
                 else:
                     cur_day_of_year = tim.day_of_year
-                    self.trajectories[traj_idx].append([[], [], [], [], [], [], [], []])
-                    self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1][int(tim.hour / 3)].append(checkin)
+                    self.trajectories[traj_idx].append([[] for _ in range(time_slices)])
+                    self.trajectories[traj_idx][-1][int(tim.hour / int(24 / time_slices))].append(checkin)
 
         print(f"Train dataset length: ", len(self.trajectories))
 
@@ -50,7 +50,7 @@ class TrajectoryTrainDataset(Dataset):
 
 
 class TrajectoryValDataset(Dataset):
-    def __init__(self, data_df, map_set):
+    def __init__(self, data_df, map_set, time_slices):
         user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict = map_set
         self.trajectories = {}
         self.labels = {}
@@ -71,7 +71,7 @@ class TrajectoryValDataset(Dataset):
             self.trajectories[traj_idx] = []
             self.labels[traj_idx] = []
             cur_day_of_year = trajectory.iloc[0]['local_time'].day_of_year
-            self.trajectories[traj_idx].append([[], [], [], [], [], [], [], []])
+            self.trajectories[traj_idx].append([[] for _ in range(time_slices)])
 
             for index in range(len(trajectory) - 1):
                 _, pid, cid, _, _, _, _, _, _, tim, _, _, _, _, _, coo = trajectory.iloc[index]
@@ -85,11 +85,11 @@ class TrajectoryValDataset(Dataset):
                 if next_tim.day_of_year != tim.day_of_year or index == len(trajectory) - 2:
                     self.labels[traj_idx].append(labels)
                 if tim.day_of_year == cur_day_of_year:
-                    self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1][int(tim.hour / 3)].append(checkin)
+                    self.trajectories[traj_idx][-1][int(tim.hour / int(24 / time_slices))].append(checkin)
                 else:
                     cur_day_of_year = tim.day_of_year
-                    self.trajectories[traj_idx].append([[], [], [], [], [], [], [], []])
-                    self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1][int(tim.hour / 3)].append(checkin)
+                    self.trajectories[traj_idx].append([[] for _ in range(time_slices)])
+                    self.trajectories[traj_idx][-1][int(tim.hour / int(24 / time_slices))].append(checkin)
 
         print(f"Validation dataset length: ", len(self.trajectories))
 
@@ -101,7 +101,7 @@ class TrajectoryValDataset(Dataset):
 
 
 class TrajectoryTestDataset(Dataset):
-    def __init__(self, data_df, map_set):
+    def __init__(self, data_df, map_set, time_slices):
         user_id2idx_dict, POI_id2idx_dict, cat_id2idx_dict = map_set
         self.trajectories = {}
         self.labels = {}
@@ -122,7 +122,7 @@ class TrajectoryTestDataset(Dataset):
             self.trajectories[traj_idx] = []
             self.labels[traj_idx] = []
             cur_day_of_year = trajectory.iloc[0]['local_time'].day_of_year
-            self.trajectories[traj_idx].append([[], [], [], [], [], [], [], []])
+            self.trajectories[traj_idx].append([[] for _ in range(time_slices)])
 
             for index in range(len(trajectory) - 1):
                 _, pid, cid, _, _, _, _, _, _, tim, _, _, _, _, _, coo = trajectory.iloc[index]
@@ -139,11 +139,11 @@ class TrajectoryTestDataset(Dataset):
                 if next_tim.day_of_year != tim.day_of_year or index == len(trajectory) - 2:
                     self.labels[traj_idx].append(labels)
                 if tim.day_of_year == cur_day_of_year:
-                    self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1][int(tim.hour / 3)].append(checkin)
+                    self.trajectories[traj_idx][-1][int(tim.hour / int(24 / time_slices))].append(checkin)
                 else:
                     cur_day_of_year = tim.day_of_year
-                    self.trajectories[traj_idx].append([[], [], [], [], [], [], [], []])
-                    self.trajectories[traj_idx][len(self.trajectories[traj_idx]) - 1][int(tim.hour / 3)].append(checkin)
+                    self.trajectories[traj_idx].append([[] for _ in range(time_slices)])
+                    self.trajectories[traj_idx][-1][int(tim.hour / int(24 / time_slices))].append(checkin)
 
         print(f"Test dataset length: ", len(self.trajectories))
 

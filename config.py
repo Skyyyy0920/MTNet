@@ -27,10 +27,10 @@ def get_args():
                         help='Dataset name')
 
     # Model hyper-parameters
-    parser.add_argument('--nary',
+    parser.add_argument('--time_slices',
                         type=int,
-                        default=9,
-                        help='n-ary tree')
+                        default=3,
+                        help='number of time slice')
     parser.add_argument('--user_embed_dim',
                         type=int,
                         default=128,
@@ -39,10 +39,6 @@ def get_args():
                         type=int,
                         default=128,
                         help='POI embedding dimensions')
-    parser.add_argument('--time_embed_dim',
-                        type=int,
-                        default=32,
-                        help='Time embedding dimensions')
     parser.add_argument('--cat_embed_dim',
                         type=int,
                         default=32,
@@ -75,11 +71,11 @@ def get_args():
                         help='Batch size')  # 1024
     parser.add_argument('--accumulation_steps',
                         type=int,
-                        default=4,
+                        default=16,
                         help='Gradient accumulation to solve the GPU memory problem')
     parser.add_argument('--epochs',
                         type=int,
-                        default=30,
+                        default=50,
                         help='Number of epochs to train')
     parser.add_argument('--lr',
                         type=float,
