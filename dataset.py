@@ -80,11 +80,8 @@ class TrajectoryValDataset(Dataset):
                 next_POI_idx, next_cat_idx = POI_id2idx_dict[next_pid], cat_id2idx_dict[next_cid]
                 features = [user_idx, POI_idx, cat_idx, coo]
                 tim_info = tim.hour * 4 + int(tim.minute / 15)  # Divide the time into time zones with 15-min intervals
-                if index == len(trajectory) - 2:
-                    labels = [next_POI_idx, next_cat_idx, next_coo]
-                else:
-                    labels = [-1, -1, -1]
-                checkin = {'features': features, 'time': tim_info, 'labels': [-1, -1, -1]}
+                labels = [next_POI_idx, next_cat_idx, next_coo]
+                checkin = {'features': features, 'time': tim_info, 'labels': labels}
                 if next_tim.day_of_year != tim.day_of_year or index == len(trajectory) - 2:
                     self.labels[traj_idx].append(labels)
                 if tim.day_of_year == cur_day_of_year:
@@ -138,7 +135,7 @@ class TrajectoryTestDataset(Dataset):
                     labels = [next_POI_idx, next_cat_idx, next_coo]
                 else:
                     labels = [-1, -1, -1]
-                checkin = {'features': features, 'time': tim_info, 'labels': [-1, -1, -1]}
+                checkin = {'features': features, 'time': tim_info, 'labels': labels}
                 if next_tim.day_of_year != tim.day_of_year or index == len(trajectory) - 2:
                     self.labels[traj_idx].append(labels)
                 if tim.day_of_year == cur_day_of_year:
