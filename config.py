@@ -57,11 +57,11 @@ def get_args():
                         help='Coordinate embedding dimensions')
     parser.add_argument('--embed_dropout',
                         type=float,
-                        default=0.2,
+                        default=0.4,
                         help='Dropout rate for embedding')
     parser.add_argument('--model_dropout',
                         type=float,
-                        default=0.4,
+                        default=0.6,
                         help='Dropout rate for TreeLSTM')
     parser.add_argument('--h_size',
                         type=int,
@@ -75,7 +75,7 @@ def get_args():
                         help='Batch size')  # 1024
     parser.add_argument('--accumulation_steps',
                         type=int,
-                        default=16,
+                        default=4,
                         help='Gradient accumulation to solve the GPU memory problem')
     parser.add_argument('--epochs',
                         type=int,
