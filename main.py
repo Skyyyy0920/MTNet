@@ -144,7 +144,7 @@ if __name__ == '__main__':
     print('\n' + '=' * 36 + ' Start training ' + '=' * 36)
 
     current_patience = 0
-    best_validation_loss = float('inf')
+    best_val_loss = float('inf')
     early_stopping_flag = False
 
     # Training loop
@@ -229,12 +229,11 @@ if __name__ == '__main__':
                 loss = criterion_POI(y_pred_POI, y_POI.long())
                 loss_list.append(loss.item())
 
-            validation_loss = np.mean(loss_list)
+            val_loss = np.mean(loss_list)
             logging.info(f"----------------------------------  Validation  ---------------------------------")
-            logging.info(f"Current epoch's mean loss: {validation_loss:.4f}, "
-                         f"best validation loss: {best_validation_loss:.4f}")
-            if validation_loss < best_validation_loss:
-                best_validation_loss = validation_loss
+            logging.info(f"Current epoch's mean loss: {val_loss:.4f}, best validation loss: {best_val_loss:.4f}")
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
                 current_patience = 0
             else:
                 current_patience += 1
