@@ -1,3 +1,4 @@
+import torch
 import yaml
 import time
 import pickle
@@ -231,7 +232,7 @@ if __name__ == '__main__':
 
         # Logging
         logging.info(
-            f"*****************************  Training epoch: {epoch + 1}/{args.epochs}  ****************************")
+            f"****************************  Training epoch: {epoch + 1}/{args.epochs}  ****************************")
         logging.info(f"Current epoch's mean loss: {np.mean(loss_list):.4f}"
                      f"\t\tLr: {optimizer.param_groups[0]['lr']:.4f}\t\tMulti-loss weight: {multi_task_loss.params}")
 
@@ -316,6 +317,19 @@ if __name__ == '__main__':
 
                 y_pred_POI, y_pred_cat, y_pred_coo = TreeLSTM_model(MT_input)
                 y_POI, y_cat, y_coo = MT_input.label[:, 0], MT_input.label[:, 1], MT_input.label[:, 2]
+
+                row_indices = torch.where(y_POI != -1)[0].cpu()
+                ind1 = torch.where(MT_input.type == 0)[0].cpu()
+                row = torch.tensor([idx for idx in row_indices if idx in ind1])
+                y_POI = y_POI[row]
+                y_pred_POI_day_node = y_pred_POI[row]
+                ind2 = torch.where(MT_input.type == 1)[0].cpu()
+                row2 = torch.tensor([idx for idx in row_indices if idx in ind2])
+                y_pred_POI_period_node = y_pred_POI[row2]
+                ind3 = torch.where(MT_input.type == 2)[0].cpu()
+                row3 = torch.tensor([idx for idx in row_indices if idx in ind3])
+                y_pred_POI_last_POI = y_pred_POI[row3]
+                y_pred_POI = y_pred_POI_period_node + y_pred_POI_day_node + y_pred_POI_last_POI
 
                 y_pred_POI_list.append(y_pred_POI.detach().cpu().numpy())
                 y_label_POI_list.append(y_POI.detach().cpu().numpy())
