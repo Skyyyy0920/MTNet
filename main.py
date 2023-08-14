@@ -1,4 +1,3 @@
-import torch
 import yaml
 import time
 import pickle
