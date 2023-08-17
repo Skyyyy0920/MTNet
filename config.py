@@ -27,9 +27,9 @@ def get_args():
                         help='Dataset name')
 
     # Model hyper-parameters
-    parser.add_argument('--time_slices',
+    parser.add_argument('--time_slots',
                         type=int,
-                        default=3,
+                        default=4,
                         help='number of time slice')
     parser.add_argument('--user_embed_dim',
                         type=int,
