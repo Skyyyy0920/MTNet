@@ -34,11 +34,11 @@ class TrajectoryTrainDataset(Dataset):
                 if next_tim.day_of_year != tim.day_of_year or index == len(trajectory) - 2:
                     self.labels[traj_idx].append(labels)
                 if tim.day_of_year == cur_day_of_year:
-                    self.trajectories[traj_idx][-1][int(tim.hour / int(24 / time_slices))].append(checkin)
+                    self.trajectories[traj_idx][-1][int(tim.hour / (24 / time_slices))].append(checkin)
                 else:
                     cur_day_of_year = tim.day_of_year
                     self.trajectories[traj_idx].append([[] for _ in range(time_slices)])
-                    self.trajectories[traj_idx][-1][int(tim.hour / int(24 / time_slices))].append(checkin)
+                    self.trajectories[traj_idx][-1][int(tim.hour / (24 / time_slices))].append(checkin)
 
         print(f"Train dataset length: ", len(self.trajectories))
 
@@ -85,11 +85,11 @@ class TrajectoryValDataset(Dataset):
                 if next_tim.day_of_year != tim.day_of_year or index == len(trajectory) - 2:
                     self.labels[traj_idx].append(labels)
                 if tim.day_of_year == cur_day_of_year:
-                    self.trajectories[traj_idx][-1][int(tim.hour / int(24 / time_slices))].append(checkin)
+                    self.trajectories[traj_idx][-1][int(tim.hour / (24 / time_slices))].append(checkin)
                 else:
                     cur_day_of_year = tim.day_of_year
                     self.trajectories[traj_idx].append([[] for _ in range(time_slices)])
-                    self.trajectories[traj_idx][-1][int(tim.hour / int(24 / time_slices))].append(checkin)
+                    self.trajectories[traj_idx][-1][int(tim.hour / (24 / time_slices))].append(checkin)
 
         print(f"Validation dataset length: ", len(self.trajectories))
 
@@ -139,11 +139,11 @@ class TrajectoryTestDataset(Dataset):
                 if next_tim.day_of_year != tim.day_of_year or index == len(trajectory) - 2:
                     self.labels[traj_idx].append(labels)
                 if tim.day_of_year == cur_day_of_year:
-                    self.trajectories[traj_idx][-1][int(tim.hour / int(24 / time_slices))].append(checkin)
+                    self.trajectories[traj_idx][-1][int(tim.hour / (24 / time_slices))].append(checkin)
                 else:
                     cur_day_of_year = tim.day_of_year
                     self.trajectories[traj_idx].append([[] for _ in range(time_slices)])
-                    self.trajectories[traj_idx][-1][int(tim.hour / int(24 / time_slices))].append(checkin)
+                    self.trajectories[traj_idx][-1][int(tim.hour / (24 / time_slices))].append(checkin)
 
         print(f"Test dataset length: ", len(self.trajectories))
 
