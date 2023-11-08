@@ -1,10 +1,7 @@
 import torch
 import argparse
 
-if torch.cuda.is_available():
-    device = torch.device('cuda')
-else:
-    device = torch.device('cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def get_args():
@@ -27,10 +24,10 @@ def get_args():
                         help='Dataset name')
 
     # Model hyper-parameters
-    parser.add_argument('--time_slots',
+    parser.add_argument('--n_time_slot',
                         type=int,
                         default=4,
-                        help='number of time slice')
+                        help='number of time slot (period node)')
     parser.add_argument('--user_embed_dim',
                         type=int,
                         default=128,
@@ -71,7 +68,7 @@ def get_args():
                         help='Batch size')  # 1024
     parser.add_argument('--accumulation_steps',
                         type=int,
-                        default=4,
+                        default=32,
                         help='Gradient accumulation to solve the GPU memory problem')
     parser.add_argument('--epochs',
                         type=int,
