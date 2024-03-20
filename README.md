@@ -1,6 +1,6 @@
 # MTNet - Mobility Tree Network for Next POI Recommendation
 
-This is the code implementation for our paper [Learning Time Slot Preferences via Mobility Tree for Next POI Recommendation  (AAAI2024)](https://1).
+This is the code implementation for our paper [Learning Time Slot Preferences via Mobility Tree for Next POI Recommendation  (AAAI2024)](https://arxiv.org/pdf/2403.12100.pdf).
 
 ## Cite our work
 ```bibtex
