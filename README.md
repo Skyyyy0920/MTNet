@@ -27,3 +27,6 @@ pip install -r requirements.txt
 ## FAQ
 - Q: How about the total running time?    
   A: NYC dataset runs for about 1 hour on NVIDIA GeForce RTX 2060. For Gowalla and TKY datasets, this time is about 2.5 hours.
+  
+- Q: Where are the TKY and Gowalla dataset?    
+  A: See [Issue](https://github.com/Skyyyy0920/MTNet/issues/4).
